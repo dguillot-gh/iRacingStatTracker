@@ -32,6 +32,7 @@ import {
   Settings as SettingsIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material'
 import { LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
@@ -40,8 +41,11 @@ import RacePlanner from './pages/RacePlanner'
 import RaceHistory from './pages/RaceHistory'
 import ChampionshipManager from './pages/ChampionshipManager'
 import ChampionshipAnalysis from './pages/ChampionshipAnalysis'
+import SettingsDialog from './components/SettingsDialog'
 import { RaceEntry } from './types/race'
-import { StorageService } from './services/storage'
+import { StorageService, AppSettings } from './services/storage'
+import Calendar from './pages/Calendar'
+import Settings from './pages/Settings'
 
 // Create theme with color palette
 const createAppTheme = (mode: 'light' | 'dark') =>
@@ -79,32 +83,64 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark')
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<AppSettings>({
+    theme: 'dark',
+    notifications: false,
+    calendarSync: false,
+  })
   
   const theme = createAppTheme(themeMode)
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const location = useLocation()
 
-  // Load races from localStorage on initial render
+  // Load races and settings from localStorage on initial render
   useEffect(() => {
-    const loadRaces = async () => {
+    const loadData = async () => {
       try {
-        const storedRaces = await StorageService.getRaces()
-        setRaces(storedRaces)
+        setIsLoading(true)
+        const [loadedRaces, loadedSettings] = await Promise.all([
+          StorageService.getRaces(),
+          StorageService.getSettings(),
+        ])
+        setRaces(loadedRaces)
+        setSettings(loadedSettings)
+        setThemeMode(loadedSettings.theme)
       } catch (error) {
-        console.error('Failed to load races:', error)
+        console.error('Failed to load data:', error)
       } finally {
         setIsLoading(false)
       }
     }
-    loadRaces()
+    loadData()
   }, [])
+
+  // Save races whenever they change
+  useEffect(() => {
+    if (!isLoading) {
+      StorageService.saveRaces(races).catch(error => {
+        console.error('Failed to save races:', error)
+      })
+    }
+  }, [races, isLoading])
+
+  // Save settings whenever they change
+  useEffect(() => {
+    if (!isLoading) {
+      StorageService.saveSettings(settings).catch(error => {
+        console.error('Failed to save settings:', error)
+      })
+    }
+  }, [settings, isLoading])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
   }
 
   const handleThemeToggle = () => {
-    setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')
+    const newMode = themeMode === 'dark' ? 'light' : 'dark'
+    setThemeMode(newMode)
+    setSettings(prev => ({ ...prev, theme: newMode }))
   }
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -115,12 +151,34 @@ export default function App() {
     setAnchorEl(null)
   }
 
+  const handleSettingsOpen = () => {
+    setSettingsOpen(true)
+    handleMenuClose()
+  }
+
+  const handleSettingsClose = () => {
+    setSettingsOpen(false)
+  }
+
+  const handleRaceUpdate = (updatedRaces: RaceEntry[]) => {
+    setRaces(updatedRaces)
+    StorageService.saveRaces(updatedRaces)
+  }
+
+  const handleSettingsUpdate = (newSettings: AppSettings) => {
+    setSettings(newSettings)
+    setThemeMode(newSettings.theme)
+    StorageService.saveSettings(newSettings)
+  }
+
   const navigationItems = [
     { path: '/', label: 'Dashboard', icon: <DashboardIcon /> },
     { path: '/planner', label: 'Race Planner', icon: <EventIcon /> },
     { path: '/history', label: 'Race History', icon: <HistoryIcon /> },
     { path: '/championship', label: 'Championship', icon: <TrophyIcon /> },
     { path: '/analysis', label: 'Analysis', icon: <AnalyticsIcon /> },
+    { path: '/calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
+    { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
   ]
 
   const drawer = (
@@ -128,7 +186,6 @@ export default function App() {
       <List>
         {navigationItems.map((item) => (
           <ListItem
-            button
             key={item.path}
             component={Link}
             to={item.path}
@@ -182,7 +239,7 @@ export default function App() {
                 open={Boolean(anchorEl)}
                 onClose={handleMenuClose}
               >
-                <MenuItem onClick={handleMenuClose}>Settings</MenuItem>
+                <MenuItem onClick={handleSettingsOpen}>Settings</MenuItem>
                 <MenuItem onClick={handleMenuClose}>Profile</MenuItem>
                 <MenuItem onClick={handleMenuClose}>Backup Data</MenuItem>
               </Menu>
@@ -240,11 +297,11 @@ export default function App() {
               <Route path="/" element={<Dashboard races={races} />} />
               <Route
                 path="/planner"
-                element={<RacePlanner races={races} onRaceUpdate={setRaces} />}
+                element={<RacePlanner races={races} onRaceUpdate={handleRaceUpdate} />}
               />
               <Route
                 path="/history"
-                element={<RaceHistory races={races} onRaceUpdate={setRaces} />}
+                element={<RaceHistory races={races} onRaceUpdate={handleRaceUpdate} />}
               />
               <Route
                 path="/championship"
@@ -254,9 +311,31 @@ export default function App() {
                 path="/analysis"
                 element={<ChampionshipAnalysis races={races} />}
               />
+              <Route
+                path="/calendar"
+                element={<Calendar races={races} onRaceUpdate={handleRaceUpdate} />}
+              />
+              <Route
+                path="/settings"
+                element={
+                  <Settings
+                    settings={settings}
+                    onSettingsUpdate={handleSettingsUpdate}
+                    races={races}
+                  />
+                }
+              />
             </Routes>
           </Box>
         </Box>
+
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={handleSettingsClose}
+          onThemeChange={handleThemeToggle}
+          isDarkMode={themeMode === 'dark'}
+          onDataImport={setRaces}
+        />
       </LocalizationProvider>
     </ThemeProvider>
   )

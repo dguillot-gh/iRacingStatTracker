@@ -1,14 +1,10 @@
-export type RaceSeries = 'Draftmasters' | 'Pro Series' | 'World Championship'
-
-export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
-
-export type RecurrencePattern = 'daily' | 'weekly' | 'none'
-
+export type TrackType = 'oval' | 'road' | 'dirt'
 export type RaceClass = 'oval' | 'road'
+export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
 
 export interface Track {
   name: string
-  type: 'oval' | 'road' | 'dirt'
+  type: TrackType
 }
 
 export interface QualifyingResult {
@@ -24,49 +20,55 @@ export interface RatingChange {
 }
 
 export interface RaceResult {
-  finishPosition: number
-  startPosition: number
-  incidentPoints: number
-  championshipPoints: number
-  bestLapTime: number // in seconds
-  // Advanced optional fields
-  qualifyingResult?: QualifyingResult
+  qualifyingResult?: {
+    position: number
+    bestLapTime: number
+    gap: number
+  }
   split?: number
   totalSplits?: number
   strengthOfField?: number
-  iRating?: RatingChange
-  safetyRating?: RatingChange
+  position?: number
   averageLapTime?: number
+  bestLapTime?: number
   leadLaps?: number
   totalLaps?: number
-  gapToLeader?: number  // in seconds
-  fuelUsagePerLap?: number
+  iRating?: {
+    before: number
+    after: number
+    change: number
+  }
+  safetyRating?: {
+    before: number
+    after: number
+    change: number
+  }
+  incidents?: number
 }
 
 export interface ChampionshipStanding {
   position: number
   points: number
-  droppedWeeks: number[]
   requiredRaces: number
-  completedRaces: number
+  droppedWeeks: number[]
 }
 
 export interface RaceEntry {
   id: string
-  series: RaceSeries
+  date: Date
+  endDate?: Date
+  series: string
   class: RaceClass
+  track: Track
   vehicle: string
   week: number
   season: string
-  track: Track
-  date: Date
-  endDate?: Date // For multi-day events
-  recurrence?: RecurrencePattern
-  recurrenceGroupId?: string // To group recurring races together
   status: RaceStatus
+  notes?: string
   result?: RaceResult
   championshipStanding?: ChampionshipStanding
-  notes?: string
+  recurrence?: 'none' | 'daily' | 'weekly'
+  recurrenceGroupId?: string
 }
 
 export type RaceFormData = Omit<RaceEntry, 'id' | 'completed' | 'position' | 'iRatingChange'> 

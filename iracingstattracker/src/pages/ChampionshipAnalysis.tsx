@@ -22,15 +22,11 @@ import {
   Slider,
   Chip,
   LinearProgress,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
 } from '@mui/material'
-import {
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
-} from '@mui/lab'
 import { RaceEntry, RaceSeries } from '../types/race'
 import { format, isAfter, isBefore, startOfToday } from 'date-fns'
 
@@ -237,35 +233,42 @@ export default function ChampionshipAnalysis({ races }: ChampionshipAnalysisProp
       {selectedSeries !== 'all' && (
         <Paper sx={{ p: 3, mt: 3 }}>
           <Typography variant="h6" gutterBottom>Championship Progress</Typography>
-          <Timeline>
+          <Stepper orientation="vertical">
             {races
               .filter(race => race.series === selectedSeries)
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
               .map((race, index) => (
-                <TimelineItem key={race.id}>
-                  <TimelineSeparator>
-                    <TimelineDot color={
-                      race.status === 'completed' ? 'success' :
-                      race.status === 'upcoming' ? 'primary' : 'grey'
-                    } />
-                    {index < races.length - 1 && <TimelineConnector />}
-                  </TimelineSeparator>
-                  <TimelineContent>
+                <Step key={race.id} active={race.status === 'completed'}>
+                  <StepLabel>
                     <Typography variant="subtitle2">
                       {format(new Date(race.date), 'MMM d, yyyy')} - {race.track.name}
                     </Typography>
+                  </StepLabel>
+                  <StepContent>
                     {race.status === 'completed' && race.result && (
-                      <Typography variant="body2" color="textSecondary">
-                        P{race.result.finishPosition} - {race.result.championshipPoints} points
+                      <>
+                        <Typography variant="body2">
+                          Finish Position: P{race.result.finishPosition}
+                        </Typography>
+                        <Typography variant="body2">
+                          Points: {race.result.championshipPoints}
+                        </Typography>
                         {race.championshipStanding && (
-                          <> (P{race.championshipStanding.position} in championship)</>
+                          <Typography variant="body2" color="primary">
+                            Championship Position: P{race.championshipStanding.position}
+                          </Typography>
                         )}
+                      </>
+                    )}
+                    {race.status === 'upcoming' && (
+                      <Typography variant="body2" color="textSecondary">
+                        Upcoming Race
                       </Typography>
                     )}
-                  </TimelineContent>
-                </TimelineItem>
+                  </StepContent>
+                </Step>
               ))}
-          </Timeline>
+          </Stepper>
         </Paper>
       )}
     </Box>

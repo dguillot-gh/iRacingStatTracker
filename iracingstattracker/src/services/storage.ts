@@ -1,73 +1,81 @@
 import { RaceEntry } from '../types/race'
 
-const RACES_STORAGE_KEY = 'iracingstat_races'
+const STORAGE_KEYS = {
+  RACES: 'races',
+  SETTINGS: 'settings',
+  THEME: 'theme',
+} as const
 
-export const StorageService = {
-  saveRaces: (races: RaceEntry[]): void => {
+export interface AppSettings {
+  theme: 'light' | 'dark'
+  notifications: boolean
+  calendarSync: boolean
+}
+
+export class StorageService {
+  static async getRaces(): Promise<RaceEntry[]> {
     try {
-      if (!Array.isArray(races)) {
-        console.error('Invalid races data: expected array')
-        return
-      }
+      const racesJson = localStorage.getItem(STORAGE_KEYS.RACES)
+      if (!racesJson) return []
 
-      // Convert dates to ISO strings for storage
-      const racesToStore = races.map(race => ({
+      const races = JSON.parse(racesJson)
+      return races.map((race: any) => ({
         ...race,
-        date: race.date instanceof Date ? race.date.toISOString() : race.date,
-        endDate: race.endDate instanceof Date ? race.endDate.toISOString() : race.endDate
+        date: new Date(race.date),
+        endDate: race.endDate ? new Date(race.endDate) : undefined,
       }))
-
-      localStorage.setItem(RACES_STORAGE_KEY, JSON.stringify(racesToStore))
-      console.debug(`Saved ${races.length} races to localStorage`)
     } catch (error) {
-      console.error('Error saving races to localStorage:', error)
-      throw new Error('Failed to save races to localStorage')
-    }
-  },
-
-  loadRaces: (): RaceEntry[] => {
-    try {
-      const savedRaces = localStorage.getItem(RACES_STORAGE_KEY)
-      if (!savedRaces) {
-        console.debug('No saved races found in localStorage')
-        return []
-      }
-
-      const parsedRaces = JSON.parse(savedRaces)
-      if (!Array.isArray(parsedRaces)) {
-        console.error('Invalid saved races data: expected array')
-        return []
-      }
-
-      // Convert ISO strings back to Date objects and validate data
-      return parsedRaces.map((race: any) => {
-        try {
-          return {
-            ...race,
-            date: new Date(race.date),
-            endDate: race.endDate ? new Date(race.endDate) : null,
-            // Ensure required properties exist
-            id: race.id || crypto.randomUUID(),
-            status: race.status || 'upcoming',
-          }
-        } catch (parseError) {
-          console.error('Error parsing race entry:', parseError)
-          return null
-        }
-      }).filter((race): race is RaceEntry => race !== null)
-    } catch (error) {
-      console.error('Error loading races from localStorage:', error)
+      console.error('Failed to load races:', error)
       return []
     }
-  },
+  }
 
-  clearRaces: (): void => {
+  static async saveRaces(races: RaceEntry[]): Promise<void> {
     try {
-      localStorage.removeItem(RACES_STORAGE_KEY)
-      console.debug('Cleared races from localStorage')
+      localStorage.setItem(STORAGE_KEYS.RACES, JSON.stringify(races))
     } catch (error) {
-      console.error('Error clearing races from localStorage:', error)
-      throw new Error('Failed to clear races from localStorage')
+      console.error('Failed to save races:', error)
+      throw error
+    }
+  }
+
+  static async getSettings(): Promise<AppSettings> {
+    try {
+      const settingsJson = localStorage.getItem(STORAGE_KEYS.SETTINGS)
+      if (!settingsJson) {
+        return {
+          theme: 'dark',
+          notifications: false,
+          calendarSync: false,
+        }
+      }
+
+      return JSON.parse(settingsJson)
+    } catch (error) {
+      console.error('Failed to load settings:', error)
+      return {
+        theme: 'dark',
+        notifications: false,
+        calendarSync: false,
+      }
+    }
+  }
+
+  static async saveSettings(settings: AppSettings): Promise<void> {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings))
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      throw error
+    }
+  }
+
+  static async clearStorage(): Promise<void> {
+    try {
+      localStorage.clear()
+    } catch (error) {
+      console.error('Failed to clear storage:', error)
+      throw error
     }
   }
 } 

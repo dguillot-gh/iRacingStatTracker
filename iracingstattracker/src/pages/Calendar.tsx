@@ -1,309 +1,268 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import {
   Box,
   Typography,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormControlLabel,
-  Switch,
-  Stack,
+  Paper,
   Grid,
+  Card,
+  CardContent,
+  IconButton,
+  Tooltip,
+  Stack,
+  Chip,
+  Button,
 } from '@mui/material'
-import { DatePicker } from '@mui/x-date-pickers'
-import { RaceEntry, RaceSeries, RecurrencePattern } from '../types/race'
-import RaceCalendar from '../components/RaceCalendar'
-import { v4 as uuidv4 } from 'uuid'
-import { addDays, eachDayOfInterval, addWeeks } from 'date-fns'
-import DataManagement from '../components/DataManagement'
+import {
+  Today as TodayIcon,
+  Event as EventIcon,
+  EventBusy as CancelledIcon,
+  CheckCircle as CompletedIcon,
+  Add as AddIcon,
+} from '@mui/icons-material'
+import {
+  Calendar as BigCalendar,
+  dateFnsLocalizer,
+  Views,
+} from 'react-big-calendar'
+import {
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  isWithinInterval,
+  startOfMonth,
+  endOfMonth,
+} from 'date-fns'
+import { enUS } from 'date-fns/locale'
+import { RaceEntry } from '../types/race'
+import RaceFormDialog from '../components/RaceFormDialog'
+import '../styles/calendar.css'
+
+const locales = {
+  'en-US': enUS,
+}
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  locales,
+})
 
 interface CalendarProps {
   races: RaceEntry[]
-  onAddRace: (race: RaceEntry) => void
-  onUpdateRace: (id: string, updates: Partial<RaceEntry>) => void
+  onRaceUpdate: (races: RaceEntry[]) => void
 }
 
-const initialFormState = {
-  series: 'Draftmasters' as RaceSeries,
-  vehicle: '',
-  week: 1,
-  season: new Date().getFullYear().toString(),
-  date: new Date(),
-  track: {
-    name: '',
-    type: 'oval' as const
-  },
-  status: 'upcoming' as const
-}
+export default function Calendar({ races, onRaceUpdate }: CalendarProps) {
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
 
-export default function Calendar({ races, onAddRace, onUpdateRace }: CalendarProps) {
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formData, setFormData] = useState<Partial<RaceEntry>>(initialFormState)
-  const [editingRaceId, setEditingRaceId] = useState<string | null>(null)
-  const [isMultiDay, setIsMultiDay] = useState(false)
+  const handleCreateRace = () => {
+    setSelectedDate(new Date())
+    setSelectedRace(null)
+    setFormOpen(true)
+  }
 
-  // Filter out completed races for the calendar view
-  const upcomingRaces = useMemo(() => 
-    races.filter(race => race.status === 'upcoming'),
-    [races]
-  )
+  const handleDateSelect = ({ start }: { start: Date }) => {
+    setSelectedDate(start)
+    setSelectedRace(null)
+    setFormOpen(true)
+  }
 
-  const handleFormOpen = (race?: RaceEntry) => {
-    if (race) {
-      setFormData(race)
-      setIsMultiDay(!!race.endDate)
-      setEditingRaceId(race.id)
-    } else {
-      setFormData(initialFormState)
-      setIsMultiDay(false)
-      setEditingRaceId(null)
-    }
-    setIsFormOpen(true)
+  const handleEventSelect = (event: RaceEntry) => {
+    setSelectedRace(event)
+    setFormOpen(true)
   }
 
   const handleFormClose = () => {
-    setIsFormOpen(false)
-    setFormData(initialFormState)
-    setEditingRaceId(null)
-    setIsMultiDay(false)
+    setFormOpen(false)
+    setSelectedDate(null)
+    setSelectedRace(null)
   }
 
-  const handleFormSubmit = () => {
-    if (!formData.series || !formData.track?.name || !formData.date) return
-
-    const baseRace: RaceEntry = {
-      id: editingRaceId || uuidv4(),
-      series: formData.series as RaceSeries,
-      vehicle: formData.vehicle || '',
-      week: formData.week || 1,
-      season: formData.season || new Date().getFullYear().toString(),
-      date: formData.date,
-      track: {
-        name: formData.track.name,
-        type: formData.track.type || 'oval'
-      },
-      status: formData.status || 'upcoming'
-    }
-
-    if (isMultiDay && formData.endDate) {
-      baseRace.endDate = formData.endDate
-    }
-
-    if (!isMultiDay && formData.recurrence) {
-      const races: RaceEntry[] = []
-      let currentDate = formData.date
-      const recurrenceGroupId = uuidv4() // Generate a shared ID for the recurring races
-
-      if (formData.recurrence === 'daily') {
-        // Create races for each day of the week
-        for (let i = 0; i < 7; i++) {
-          races.push({
-            ...baseRace,
-            id: uuidv4(),
-            date: addDays(currentDate, i),
-            recurrence: formData.recurrence,
-            recurrenceGroupId
-          })
-        }
-      } else if (formData.recurrence === 'weekly') {
-        // Create races for 12 weeks
-        for (let i = 0; i < 12; i++) {
-          races.push({
-            ...baseRace,
-            id: uuidv4(),
-            date: addWeeks(currentDate, i),
-            week: (formData.week || 1) + i,
-            recurrence: formData.recurrence,
-            recurrenceGroupId
-          })
-        }
-      }
-
-      if (races.length > 0) {
-        races.forEach(race => onAddRace(race))
-        handleFormClose()
-        return
-      }
-    }
-
-    if (editingRaceId) {
-      onUpdateRace(editingRaceId, baseRace)
+  const handleRaceSubmit = (race: RaceEntry) => {
+    if (selectedRace) {
+      // Update existing race
+      onRaceUpdate(
+        races.map((r) => (r.id === selectedRace.id ? race : r))
+      )
     } else {
-      onAddRace(baseRace)
+      // Add new race
+      onRaceUpdate([...races, race])
     }
-
     handleFormClose()
   }
 
-  const handleImport = (importedRaces: RaceEntry[]) => {
-    importedRaces.forEach(race => onAddRace(race))
+  const eventStyleGetter = (event: RaceEntry) => {
+    let backgroundColor = '#2196f3' // default blue
+    let borderColor = '#1976d2'
+
+    switch (event.status) {
+      case 'completed':
+        backgroundColor = '#4caf50' // green
+        borderColor = '#388e3c'
+        break
+      case 'cancelled':
+        backgroundColor = '#f44336' // red
+        borderColor = '#d32f2f'
+        break
+      case 'upcoming':
+        if (event.class === 'oval') {
+          backgroundColor = '#9c27b0' // purple for oval
+          borderColor = '#7b1fa2'
+        } else {
+          backgroundColor = '#ff9800' // orange for road
+          borderColor = '#f57c00'
+        }
+        break
+    }
+
+    return {
+      style: {
+        backgroundColor,
+        borderColor,
+        color: '#fff',
+        borderRadius: '4px',
+        border: 'none',
+        padding: '2px 5px',
+      },
+    }
   }
 
+  const calendarEvents = races.map(race => ({
+    ...race,
+    title: `${race.series} - ${race.track.name}`,
+    start: new Date(race.date),
+    end: race.endDate ? new Date(race.endDate) : new Date(race.date),
+  }))
+
+  // Calculate statistics for the current month
+  const currentMonth = new Date()
+  const monthInterval = {
+    start: startOfMonth(currentMonth),
+    end: endOfMonth(currentMonth),
+  }
+
+  const monthStats = races.reduce(
+    (stats, race) => {
+      const raceDate = new Date(race.date)
+      if (isWithinInterval(raceDate, monthInterval)) {
+        stats.total++
+        if (race.status === 'completed') stats.completed++
+        if (race.status === 'cancelled') stats.cancelled++
+        if (race.status === 'upcoming') stats.upcoming++
+      }
+      return stats
+    },
+    { total: 0, completed: 0, cancelled: 0, upcoming: 0 }
+  )
+
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+    <Box sx={{ p: 3 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Race Calendar</Typography>
-        <Stack direction="row" spacing={2}>
-          <Button variant="contained" onClick={() => handleFormOpen()}>
-            Add Race
-          </Button>
-          <DataManagement races={upcomingRaces} onImport={handleImport} />
-        </Stack>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateRace}
+        >
+          Create Race
+        </Button>
       </Stack>
 
-      <RaceCalendar
-        races={upcomingRaces}
-        onRaceClick={handleFormOpen}
+      {/* Monthly Stats */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <TodayIcon color="primary" />
+                <Box>
+                  <Typography variant="h6">{monthStats.total}</Typography>
+                  <Typography color="textSecondary">Total Races</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <CompletedIcon color="success" />
+                <Box>
+                  <Typography variant="h6">{monthStats.completed}</Typography>
+                  <Typography color="textSecondary">Completed</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <EventIcon color="warning" />
+                <Box>
+                  <Typography variant="h6">{monthStats.upcoming}</Typography>
+                  <Typography color="textSecondary">Upcoming</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <CancelledIcon color="error" />
+                <Box>
+                  <Typography variant="h6">{monthStats.cancelled}</Typography>
+                  <Typography color="textSecondary">Cancelled</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Calendar */}
+      <Paper sx={{ p: 2, height: 'calc(100vh - 300px)' }}>
+        <BigCalendar
+          localizer={localizer}
+          events={calendarEvents}
+          startAccessor="start"
+          endAccessor="end"
+          selectable
+          onSelectSlot={handleDateSelect}
+          onSelectEvent={handleEventSelect}
+          eventPropGetter={eventStyleGetter}
+          views={[Views.MONTH, Views.WEEK, Views.DAY]}
+          defaultView={Views.MONTH}
+          tooltipAccessor={(event: any) => `${event.series} - ${event.track.name}`}
+        />
+      </Paper>
+
+      {/* Race Form Dialog */}
+      <RaceFormDialog
+        open={formOpen}
+        onClose={handleFormClose}
+        onSubmit={handleRaceSubmit}
+        initialData={selectedRace || (selectedDate ? {
+          id: crypto.randomUUID(),
+          date: selectedDate,
+          series: '',
+          class: 'oval',
+          track: { name: '', type: 'oval' },
+          vehicle: '',
+          week: 1,
+          season: new Date().getFullYear().toString(),
+          status: 'upcoming',
+        } : undefined)}
       />
-
-      <Dialog open={isFormOpen} onClose={handleFormClose} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingRaceId ? 'Edit Race' : 'Add Race'}</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item sm={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Series</InputLabel>
-                <Select
-                  value={formData.series || ''}
-                  label="Series"
-                  onChange={(e) => setFormData({ ...formData, series: e.target.value as RaceSeries })}
-                >
-                  <MenuItem value="Draftmasters">Draftmasters</MenuItem>
-                  <MenuItem value="Nascar Trucks">Nascar Trucks</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item sm={12} md={6}>
-              <TextField
-                fullWidth
-                label="Vehicle"
-                value={formData.vehicle || ''}
-                onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
-              />
-            </Grid>
-
-            <Grid item sm={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Week"
-                value={formData.week || ''}
-                onChange={(e) => setFormData({ ...formData, week: parseInt(e.target.value) })}
-                inputProps={{ min: 1, max: 13 }}
-              />
-            </Grid>
-
-            <Grid item sm={12} md={6}>
-              <TextField
-                fullWidth
-                label="Season"
-                value={formData.season || ''}
-                onChange={(e) => setFormData({ ...formData, season: e.target.value })}
-              />
-            </Grid>
-
-            <Grid item sm={12} md={6}>
-              <TextField
-                fullWidth
-                label="Track Name"
-                value={formData.track?.name || ''}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  track: { ...formData.track!, name: e.target.value }
-                })}
-              />
-            </Grid>
-
-            <Grid item sm={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Track Type</InputLabel>
-                <Select
-                  value={formData.track?.type || 'oval'}
-                  label="Track Type"
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    track: { ...formData.track!, type: e.target.value as 'oval' | 'road' | 'dirt' }
-                  })}
-                >
-                  <MenuItem value="oval">Oval</MenuItem>
-                  <MenuItem value="road">Road</MenuItem>
-                  <MenuItem value="dirt">Dirt</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item sm={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isMultiDay}
-                    onChange={(e) => {
-                      setIsMultiDay(e.target.checked)
-                      if (!e.target.checked) {
-                        setFormData({ ...formData, endDate: undefined, recurrence: undefined })
-                      }
-                    }}
-                  />
-                }
-                label="Multi-day Event"
-              />
-            </Grid>
-
-            <Grid item sm={12} md={isMultiDay ? 6 : 12}>
-              <DatePicker
-                label="Start Date"
-                value={formData.date || null}
-                onChange={(newDate) => setFormData({ ...formData, date: newDate || new Date() })}
-                sx={{ width: '100%' }}
-              />
-            </Grid>
-
-            {isMultiDay && (
-              <Grid item sm={12} md={6}>
-                <DatePicker
-                  label="End Date"
-                  value={formData.endDate || null}
-                  onChange={(newDate) => setFormData({ ...formData, endDate: newDate || undefined })}
-                  sx={{ width: '100%' }}
-                  minDate={formData.date}
-                />
-              </Grid>
-            )}
-
-            {!isMultiDay && (
-              <Grid item sm={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Recurrence</InputLabel>
-                  <Select
-                    value={formData.recurrence || 'none'}
-                    label="Recurrence"
-                    onChange={(e) => setFormData({ ...formData, recurrence: e.target.value as RecurrencePattern })}
-                  >
-                    <MenuItem value="none">No Recurrence</MenuItem>
-                    <MenuItem value="daily">Daily for a Week</MenuItem>
-                    <MenuItem value="weekly">Weekly for 12 Weeks</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleFormClose}>Cancel</Button>
-          <Button onClick={handleFormSubmit} variant="contained" color="primary">
-            {editingRaceId ? 'Update' : 'Add'} Race
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 } 
