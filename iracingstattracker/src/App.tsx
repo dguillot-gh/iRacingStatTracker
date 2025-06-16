@@ -46,6 +46,8 @@ import { RaceEntry } from './types/race'
 import { StorageService, AppSettings } from './services/storage'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
+import SeriesEditor from './pages/SeriesEditor'
+import { useTheme } from './hooks/useTheme'
 
 // Create theme with color palette
 const createAppTheme = (mode: 'light' | 'dark') =>
@@ -179,6 +181,7 @@ export default function App() {
     { path: '/analysis', label: 'Analysis', icon: <AnalyticsIcon /> },
     { path: '/calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
     { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+    { path: '/series', label: 'Series Editor', icon: <SettingsIcon /> },
   ]
 
   const drawer = (
@@ -324,6 +327,10 @@ export default function App() {
                     races={races}
                   />
                 }
+              />
+              <Route
+                path="/series"
+                element={<SeriesEditor />}
               />
             </Routes>
           </Box>

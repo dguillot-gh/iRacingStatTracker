@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import React, { useMemo, memo } from 'react'
 import {
   Box,
   Typography,
@@ -16,7 +16,6 @@ import {
   LinearProgress,
   Divider,
 } from '@mui/material'
-import { RaceEntry, Track } from '../types/race'
 import {
   isAfter,
   isBefore,
@@ -25,10 +24,8 @@ import {
   startOfYear,
   endOfYear,
 } from 'date-fns'
-
-interface DashboardProps {
-  races: RaceEntry[]
-}
+import { useRaces } from '../hooks/useRaces'
+import { RaceEntry, Track, RaceClass } from '../types/race'
 
 interface TrackStats {
   name: string
@@ -60,8 +57,116 @@ interface ClassStats {
   bestFinish: number
 }
 
-export default function Dashboard({ races }: DashboardProps) {
-  const today = startOfDay(new Date())
+const StatCard = memo(({ title, value, subtitle }: { title: string; value: string | number; subtitle?: string }) => (
+  <Grid item xs={6}>
+    <Typography variant="subtitle2" color="textSecondary">
+      {title}
+    </Typography>
+    <Typography variant="h6">
+      {typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value}
+    </Typography>
+    {subtitle && (
+      <Typography variant="caption" color="textSecondary">
+        {subtitle}
+      </Typography>
+    )}
+  </Grid>
+))
+
+StatCard.displayName = 'StatCard'
+
+const ClassPerformanceCard = memo(({ className, stats }: { className: string; stats: ClassStats }) => (
+  <Grid item xs={12} md={6}>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom sx={{ textTransform: 'capitalize' }}>
+          {className}
+        </Typography>
+        <Grid container spacing={2}>
+          <StatCard title="Total Races" value={stats.totalRaces} />
+          <StatCard title="Wins" value={stats.wins} subtitle={`${stats.winRate.toFixed(1)}%`} />
+          <StatCard title="Podiums" value={stats.podiums} subtitle={`${stats.podiumRate.toFixed(1)}%`} />
+          <StatCard title="Average Finish" value={stats.averageFinish.toFixed(1)} />
+          <StatCard title="Best Finish" value={stats.bestFinish === Infinity ? '-' : stats.bestFinish} />
+        </Grid>
+      </CardContent>
+    </Card>
+  </Grid>
+))
+
+ClassPerformanceCard.displayName = 'ClassPerformanceCard'
+
+const TrackStatsTable = memo(({ stats }: { stats: TrackStats[] }) => (
+  <TableContainer component={Paper}>
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Track</TableCell>
+          <TableCell align="right">Races</TableCell>
+          <TableCell align="right">Wins</TableCell>
+          <TableCell align="right">Podiums</TableCell>
+          <TableCell align="right">Best Finish</TableCell>
+          <TableCell align="right">Best Lap</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {stats.map((track) => (
+          <TableRow key={track.name}>
+            <TableCell>{track.name}</TableCell>
+            <TableCell align="right">{track.totalRaces}</TableCell>
+            <TableCell align="right">{track.wins}</TableCell>
+            <TableCell align="right">{track.podiums}</TableCell>
+            <TableCell align="right">
+              {track.bestFinish === Infinity ? '-' : track.bestFinish}
+            </TableCell>
+            <TableCell align="right">
+              {track.bestLapTime === Infinity ? '-' : `${track.bestLapTime.toFixed(3)}s`}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  </TableContainer>
+))
+
+TrackStatsTable.displayName = 'TrackStatsTable'
+
+const RecentRacesTable = memo(({ races }: { races: RaceEntry[] }) => (
+  <TableContainer component={Paper}>
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Date</TableCell>
+          <TableCell>Series</TableCell>
+          <TableCell>Track</TableCell>
+          <TableCell align="right">Start</TableCell>
+          <TableCell align="right">Finish</TableCell>
+          <TableCell align="right">Inc</TableCell>
+          <TableCell align="right">Points</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {races.map((race) => (
+          <TableRow key={race.id}>
+            <TableCell>{format(new Date(race.date), 'MMM d, yyyy')}</TableCell>
+            <TableCell>{race.series}</TableCell>
+            <TableCell>{race.track.name}</TableCell>
+            <TableCell align="right">{race.result?.startPosition || '-'}</TableCell>
+            <TableCell align="right">{race.result?.finishPosition || '-'}</TableCell>
+            <TableCell align="right">{race.result?.incidentPoints || '-'}</TableCell>
+            <TableCell align="right">{race.result?.championshipPoints || '-'}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  </TableContainer>
+))
+
+RecentRacesTable.displayName = 'RecentRacesTable'
+
+const DashboardComponent = () => {
+  const { races, isLoading } = useRaces();
+  const today = startOfDay(new Date());
   const currentYear = new Date().getFullYear()
   const yearStart = startOfYear(today)
   const yearEnd = endOfYear(today)
@@ -223,6 +328,14 @@ export default function Dashboard({ races }: DashboardProps) {
     return stats
   }, [races])
 
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <LinearProgress />
+      </Box>
+    )
+  }
+
   if (!careerStats) {
     return (
       <Box sx={{ p: 3 }}>
@@ -236,126 +349,45 @@ export default function Dashboard({ races }: DashboardProps) {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Dashboard</Typography>
       
+      {/* Career Overview */}
+      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Career Statistics</Typography>
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Grid container spacing={2}>
+            <StatCard title="Total Races" value={careerStats.totalRaces} />
+            <StatCard title="Wins" value={careerStats.wins} subtitle={`${careerStats.winRate.toFixed(1)}%`} />
+            <StatCard title="Podiums" value={careerStats.podiums} subtitle={`${careerStats.podiumRate.toFixed(1)}%`} />
+            <StatCard title="Championship Points" value={careerStats.totalPoints} />
+            <StatCard title="Average Finish" value={careerStats.averageFinish.toFixed(1)} />
+            <StatCard title="Average Incidents" value={careerStats.averageIncidents.toFixed(1)} />
+          </Grid>
+        </CardContent>
+      </Card>
+
       {/* Class Overview */}
       <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Class Performance</Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {Object.entries(classStats).map(([className, stats]) => (
-          <Grid item xs={12} md={6} key={className}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ textTransform: 'capitalize' }}>
-                  {className}
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography color="textSecondary" variant="body2">Total Races</Typography>
-                    <Typography variant="h6">{stats.totalRaces}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography color="textSecondary" variant="body2">Wins</Typography>
-                    <Typography variant="h6">{stats.wins} ({stats.winRate.toFixed(1)}%)</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography color="textSecondary" variant="body2">Podiums</Typography>
-                    <Typography variant="h6">{stats.podiums} ({stats.podiumRate.toFixed(1)}%)</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography color="textSecondary" variant="body2">Best Finish</Typography>
-                    <Typography variant="h6">{stats.bestFinish === Infinity ? '-' : stats.bestFinish}</Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Typography color="textSecondary" variant="body2">Average Finish</Typography>
-                    <Typography variant="h6">{stats.averageFinish.toFixed(1)}</Typography>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
+          <ClassPerformanceCard key={className} className={className} stats={stats} />
         ))}
       </Grid>
 
-      {/* Career Overview */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Career Overview</Typography>
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>Total Races</Typography>
-              <Typography variant="h4">{careerStats.totalRaces}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>Win Rate</Typography>
-              <Typography variant="h4">{careerStats.winRate.toFixed(1)}%</Typography>
-              <Typography variant="body2" color="textSecondary">
-                {careerStats.wins} wins
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>Podium Rate</Typography>
-              <Typography variant="h4">{careerStats.podiumRate.toFixed(1)}%</Typography>
-              <Typography variant="body2" color="textSecondary">
-                {careerStats.podiums} podiums
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>Average Finish</Typography>
-              <Typography variant="h4">{careerStats.averageFinish.toFixed(1)}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {/* Track Statistics */}
+      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Top Tracks</Typography>
+      <Box sx={{ mb: 4 }}>
+        <TrackStatsTable stats={trackStats} />
+      </Box>
 
-      {/* Track Performance */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>Top Tracks</Typography>
-      <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Track</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell align="right">Races</TableCell>
-              <TableCell align="right">Wins</TableCell>
-              <TableCell align="right">Podiums</TableCell>
-              <TableCell align="right">Best Finish</TableCell>
-              <TableCell align="right">Best Lap</TableCell>
-              <TableCell align="right">Avg Finish</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {trackStats.map((track) => (
-              <TableRow key={track.name}>
-                <TableCell>{track.name}</TableCell>
-                <TableCell>{track.type}</TableCell>
-                <TableCell align="right">{track.totalRaces}</TableCell>
-                <TableCell align="right">{track.wins}</TableCell>
-                <TableCell align="right">{track.podiums}</TableCell>
-                <TableCell align="right">{track.bestFinish === Infinity ? '-' : track.bestFinish}</TableCell>
-                <TableCell align="right">
-                  {track.bestLapTime === Infinity ? '-' : track.bestLapTime.toFixed(3)}
-                </TableCell>
-                <TableCell align="right">{track.averageFinish.toFixed(1)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* Recent Races */}
+      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Recent Races</Typography>
+      <Box sx={{ mb: 4 }}>
+        <RecentRacesTable races={recentRaces} />
+      </Box>
 
-      {/* Series Performance */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>Series Performance</Typography>
-      <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table>
+      {/* Series Statistics */}
+      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Series Performance</Typography>
+      <TableContainer component={Paper}>
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Series</TableCell>
@@ -380,39 +412,11 @@ export default function Dashboard({ races }: DashboardProps) {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Recent Results */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>Recent Results</Typography>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Date</TableCell>
-              <TableCell>Series</TableCell>
-              <TableCell>Track</TableCell>
-              <TableCell align="right">Finish</TableCell>
-              <TableCell align="right">Points</TableCell>
-              <TableCell align="right">Incidents</TableCell>
-              <TableCell align="right">Best Lap</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {recentRaces.map((race) => (
-              <TableRow key={race.id}>
-                <TableCell>{format(new Date(race.date), 'MMM d, yyyy')}</TableCell>
-                <TableCell>{race.series}</TableCell>
-                <TableCell>{race.track.name}</TableCell>
-                <TableCell align="right">{race.result?.finishPosition || '-'}</TableCell>
-                <TableCell align="right">{race.result?.championshipPoints || '-'}</TableCell>
-                <TableCell align="right">{race.result?.incidentPoints || '-'}</TableCell>
-                <TableCell align="right">
-                  {race.result?.bestLapTime ? race.result.bestLapTime.toFixed(3) : '-'}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
     </Box>
   )
-} 
+}
+
+const Dashboard = memo(DashboardComponent)
+Dashboard.displayName = 'Dashboard'
+
+export default Dashboard 
