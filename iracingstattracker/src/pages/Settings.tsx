@@ -210,6 +210,21 @@ const Settings = memo(() => {
     reader.readAsText(file)
   }, [setSettings])
 
+  const handleSave = () => {
+    const newSettings: AppSettings = {
+      theme: settings.theme,
+      iRacingCredentials: settings.iRacingCredentials,
+      autoRefreshInterval: settings.autoRefreshInterval,
+      defaultView: settings.defaultView,
+      notifications: settings.notifications,
+      autoBackup: settings.autoBackup,
+      backupFrequency: settings.backupFrequency,
+      calendarSync: settings.calendarSync || false
+    }
+    onSettingsUpdate(newSettings)
+    setOpen(false)
+  }
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Settings</Typography>
