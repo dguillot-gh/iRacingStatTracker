@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState, useCallback, memo } from 'react'
 import {
   Box,
   Typography,
@@ -21,31 +21,151 @@ import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material'
-import { AppSettings } from '../types/settings'
-import { RaceEntry } from '../types/race'
+import { useSettings } from '../hooks/useSettings'
+import { useRaces } from '../hooks/useRaces'
 
-interface SettingsProps {
-  settings: AppSettings
-  onSettingsUpdate: (settings: AppSettings) => void
-  races: RaceEntry[]
-}
+const BackupSection = memo(({ onBackup, onRestore }: { 
+  onBackup: () => void, 
+  onRestore: (event: React.ChangeEvent<HTMLInputElement>) => void 
+}) => {
+  const { settings, setSettings } = useSettings()
+  
+  const handleAutoBackupChange = useCallback((checked: boolean) => {
+    setSettings({ ...settings, autoBackup: checked })
+  }, [settings, setSettings])
 
-export default function Settings({ settings, onSettingsUpdate, races }: SettingsProps) {
+  const handleBackupFrequencyChange = useCallback((value: string) => {
+    setSettings({ ...settings, backupFrequency: value })
+  }, [settings, setSettings])
+
+  return (
+    <Paper sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>Backup & Restore</Typography>
+      <Stack spacing={2}>
+        <FormGroup>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={settings.autoBackup}
+                onChange={(e) => handleAutoBackupChange(e.target.checked)}
+              />
+            }
+            label="Enable Auto Backup"
+          />
+        </FormGroup>
+
+        {settings.autoBackup && (
+          <FormControl fullWidth>
+            <InputLabel>Backup Frequency</InputLabel>
+            <Select
+              value={settings.backupFrequency}
+              label="Backup Frequency"
+              onChange={(e) => handleBackupFrequencyChange(e.target.value)}
+            >
+              <MenuItem value="daily">Daily</MenuItem>
+              <MenuItem value="weekly">Weekly</MenuItem>
+              <MenuItem value="monthly">Monthly</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+
+        <Divider />
+
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="contained"
+            startIcon={<BackupIcon />}
+            onClick={onBackup}
+          >
+            Backup Now
+          </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<RestoreIcon />}
+          >
+            Restore Backup
+            <input
+              type="file"
+              hidden
+              accept=".json"
+              onChange={onRestore}
+            />
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+          >
+            Clear All Data
+          </Button>
+        </Stack>
+      </Stack>
+    </Paper>
+  )
+})
+
+BackupSection.displayName = 'BackupSection'
+
+const ExportSection = memo(() => {
+  const { races } = useRaces()
+  
+  const handleExport = useCallback(() => {
+    const csvContent = races
+      .map(race => [
+        race.date,
+        race.series,
+        race.track.name,
+        race.vehicle,
+        race.status,
+        race.result?.position || '',
+        race.result?.iRating?.change || '',
+        race.result?.safetyRating?.change || '',
+      ].join(','))
+      .join('\n')
+
+    const blob = new Blob([`Date,Series,Track,Vehicle,Status,Position,iRating Change,Safety Rating Change\n${csvContent}`], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `iracingstat-export-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [races])
+
+  return (
+    <Paper sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>Export Data</Typography>
+      <Stack direction="row" spacing={2}>
+        <Button
+          variant="outlined"
+          startIcon={<DownloadIcon />}
+          onClick={handleExport}
+        >
+          Export to CSV
+        </Button>
+      </Stack>
+    </Paper>
+  )
+})
+
+ExportSection.displayName = 'ExportSection'
+
+const Settings = memo(() => {
+  const { settings, setSettings } = useSettings()
   const [backupSuccess, setBackupSuccess] = useState<boolean | null>(null)
   const [restoreSuccess, setRestoreSuccess] = useState<boolean | null>(null)
 
-  const handleSettingChange = (key: keyof AppSettings, value: any) => {
-    onSettingsUpdate({
-      ...settings,
-      [key]: value,
-    })
-  }
+  const handleSettingChange = useCallback((key: keyof typeof settings, value: any) => {
+    setSettings({ ...settings, [key]: value })
+  }, [settings, setSettings])
 
-  const handleBackup = () => {
+  const handleBackup = useCallback(() => {
     try {
       const data = {
         settings,
-        races,
         version: '1.0.0',
         timestamp: new Date().toISOString(),
       }
@@ -65,9 +185,9 @@ export default function Settings({ settings, onSettingsUpdate, races }: Settings
       setBackupSuccess(false)
       setTimeout(() => setBackupSuccess(null), 3000)
     }
-  }
+  }, [settings])
 
-  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRestore = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -75,9 +195,8 @@ export default function Settings({ settings, onSettingsUpdate, races }: Settings
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string)
-        if (data.settings && data.races) {
-          onSettingsUpdate(data.settings)
-          // You'll need to implement race restoration through a proper handler
+        if (data.settings) {
+          setSettings(data.settings)
           setRestoreSuccess(true)
         } else {
           throw new Error('Invalid backup file format')
@@ -89,7 +208,7 @@ export default function Settings({ settings, onSettingsUpdate, races }: Settings
       setTimeout(() => setRestoreSuccess(null), 3000)
     }
     reader.readAsText(file)
-  }
+  }, [setSettings])
 
   return (
     <Box sx={{ p: 3 }}>
@@ -128,120 +247,26 @@ export default function Settings({ settings, onSettingsUpdate, races }: Settings
           </FormGroup>
         </Paper>
 
-        {/* Backup Settings */}
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>Backup & Restore</Typography>
-          <Stack spacing={2}>
-            <FormGroup>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.autoBackup}
-                    onChange={(e) => handleSettingChange('autoBackup', e.target.checked)}
-                  />
-                }
-                label="Enable Auto Backup"
-              />
-            </FormGroup>
+        <BackupSection onBackup={handleBackup} onRestore={handleRestore} />
 
-            {settings.autoBackup && (
-              <FormControl fullWidth>
-                <InputLabel>Backup Frequency</InputLabel>
-                <Select
-                  value={settings.backupFrequency}
-                  label="Backup Frequency"
-                  onChange={(e) => handleSettingChange('backupFrequency', e.target.value)}
-                >
-                  <MenuItem value="daily">Daily</MenuItem>
-                  <MenuItem value="weekly">Weekly</MenuItem>
-                  <MenuItem value="monthly">Monthly</MenuItem>
-                </Select>
-              </FormControl>
-            )}
+        {backupSuccess !== null && (
+          <Alert severity={backupSuccess ? 'success' : 'error'}>
+            {backupSuccess ? 'Backup completed successfully!' : 'Backup failed. Please try again.'}
+          </Alert>
+        )}
 
-            <Divider />
+        {restoreSuccess !== null && (
+          <Alert severity={restoreSuccess ? 'success' : 'error'}>
+            {restoreSuccess ? 'Restore completed successfully!' : 'Restore failed. Please try again.'}
+          </Alert>
+        )}
 
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="contained"
-                startIcon={<BackupIcon />}
-                onClick={handleBackup}
-              >
-                Backup Now
-              </Button>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<RestoreIcon />}
-              >
-                Restore Backup
-                <input
-                  type="file"
-                  hidden
-                  accept=".json"
-                  onChange={handleRestore}
-                />
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
-              >
-                Clear All Data
-              </Button>
-            </Stack>
-
-            {backupSuccess !== null && (
-              <Alert severity={backupSuccess ? 'success' : 'error'}>
-                {backupSuccess ? 'Backup completed successfully!' : 'Backup failed. Please try again.'}
-              </Alert>
-            )}
-
-            {restoreSuccess !== null && (
-              <Alert severity={restoreSuccess ? 'success' : 'error'}>
-                {restoreSuccess ? 'Restore completed successfully!' : 'Restore failed. Please try again.'}
-              </Alert>
-            )}
-          </Stack>
-        </Paper>
-
-        {/* Export Data */}
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>Export Data</Typography>
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={() => {
-                const csvContent = races
-                  .map(race => [
-                    race.date,
-                    race.series,
-                    race.track.name,
-                    race.vehicle,
-                    race.status,
-                    race.result?.position || '',
-                    race.result?.iRating?.change || '',
-                    race.result?.safetyRating?.change || '',
-                  ].join(','))
-                  .join('\n')
-
-                const blob = new Blob([`Date,Series,Track,Vehicle,Status,Position,iRating Change,Safety Rating Change\n${csvContent}`], { type: 'text/csv' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `iracingstat-export-${new Date().toISOString().split('T')[0]}.csv`
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
-                URL.revokeObjectURL(url)
-              }}
-            >
-              Export to CSV
-            </Button>
-          </Stack>
-        </Paper>
+        <ExportSection />
       </Stack>
     </Box>
   )
-} 
+})
+
+Settings.displayName = 'Settings'
+
+export default Settings 
