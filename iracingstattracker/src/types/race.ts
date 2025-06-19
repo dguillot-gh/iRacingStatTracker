@@ -1,5 +1,5 @@
 export type TrackType = 'oval' | 'road' | 'dirt'
-export type RaceClass = 'oval' | 'road'
+export type RaceClass = 'oval' | 'road' | 'dirt_road' | 'dirt_oval'
 export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
 export type RaceSeries = 'Draftmasters' | 'Nascar Trucks' | 'Other'
 
@@ -30,11 +30,15 @@ export interface RaceResult {
   totalSplits?: number
   strengthOfField?: number
   position?: number
-  finishPosition?: number // Adding this for compatibility
+  finishPosition?: number
+  startPosition?: number
   averageLapTime?: number
   bestLapTime?: number
   leadLaps?: number
   totalLaps?: number
+  lapsCompleted?: number
+  incidentPoints?: number
+  championshipPoints?: number
   iRating?: {
     before: number
     after: number
@@ -71,6 +75,8 @@ export interface RaceEntry {
   championshipStanding?: ChampionshipStanding
   recurrence?: 'none' | 'daily' | 'weekly'
   recurrenceGroupId?: string
+  title?: string
+  startTime?: string
 }
 
 export type RaceFormData = Omit<RaceEntry, 'id' | 'completed' | 'position' | 'iRatingChange'> 
