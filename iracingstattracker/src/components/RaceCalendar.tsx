@@ -62,8 +62,8 @@ export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) 
     )
   }, [filteredRaces, selectedDate, viewMode])
 
-  const handleSeriesChange = (event: SelectChangeEvent<RaceSeries | 'all'>) => {
-    setSelectedSeries(event.target.value as RaceSeries | 'all')
+  const handleSeriesChange = ({ target: { value } }: SelectChangeEvent<RaceSeries | 'all'>) => {
+    setSelectedSeries(value as RaceSeries | 'all')
   }
 
   const handleViewModeChange = (

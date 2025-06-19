@@ -15,6 +15,8 @@ import {
   TableRow,
   LinearProgress,
   Divider,
+  Tabs,
+  Tab,
 } from '@mui/material'
 import {
   isAfter,
@@ -26,6 +28,7 @@ import {
 } from 'date-fns'
 import { useRaces } from '../hooks/useRaces'
 import { RaceEntry, Track, RaceClass } from '../types/race'
+import PerformanceAnalytics from '../components/PerformanceAnalytics'
 
 interface TrackStats {
   name: string
@@ -166,6 +169,7 @@ RecentRacesTable.displayName = 'RecentRacesTable'
 
 const DashboardComponent = () => {
   const { races, isLoading } = useRaces();
+  const [activeTab, setActiveTab] = React.useState(0)
   const today = startOfDay(new Date());
   const currentYear = new Date().getFullYear()
   const yearStart = startOfYear(today)
@@ -349,69 +353,84 @@ const DashboardComponent = () => {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Dashboard</Typography>
       
-      {/* Career Overview */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Career Statistics</Typography>
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Grid container spacing={2}>
-            <StatCard title="Total Races" value={careerStats.totalRaces} />
-            <StatCard title="Wins" value={careerStats.wins} subtitle={`${careerStats.winRate.toFixed(1)}%`} />
-            <StatCard title="Podiums" value={careerStats.podiums} subtitle={`${careerStats.podiumRate.toFixed(1)}%`} />
-            <StatCard title="Championship Points" value={careerStats.totalPoints} />
-            <StatCard title="Average Finish" value={careerStats.averageFinish.toFixed(1)} />
-            <StatCard title="Average Incidents" value={careerStats.averageIncidents.toFixed(1)} />
-          </Grid>
-        </CardContent>
-      </Card>
+      <Tabs
+        value={activeTab}
+        onChange={(_, newValue) => setActiveTab(newValue)}
+        sx={{ mb: 3 }}
+      >
+        <Tab label="Overview" />
+        <Tab label="Performance Analytics" />
+      </Tabs>
 
-      {/* Class Overview */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Class Performance</Typography>
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {Object.entries(classStats).map(([className, stats]) => (
-          <ClassPerformanceCard key={className} className={className} stats={stats} />
-        ))}
-      </Grid>
+      {activeTab === 0 ? (
+        <>
+          {/* Career Overview */}
+          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Career Statistics</Typography>
+          <Card sx={{ mb: 4 }}>
+            <CardContent>
+              <Grid container spacing={2}>
+                <StatCard title="Total Races" value={careerStats.totalRaces} />
+                <StatCard title="Wins" value={careerStats.wins} subtitle={`${careerStats.winRate.toFixed(1)}%`} />
+                <StatCard title="Podiums" value={careerStats.podiums} subtitle={`${careerStats.podiumRate.toFixed(1)}%`} />
+                <StatCard title="Championship Points" value={careerStats.totalPoints} />
+                <StatCard title="Average Finish" value={careerStats.averageFinish.toFixed(1)} />
+                <StatCard title="Average Incidents" value={careerStats.averageIncidents.toFixed(1)} />
+              </Grid>
+            </CardContent>
+          </Card>
 
-      {/* Track Statistics */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Top Tracks</Typography>
-      <Box sx={{ mb: 4 }}>
-        <TrackStatsTable stats={trackStats} />
-      </Box>
-
-      {/* Recent Races */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Recent Races</Typography>
-      <Box sx={{ mb: 4 }}>
-        <RecentRacesTable races={recentRaces} />
-      </Box>
-
-      {/* Series Statistics */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Series Performance</Typography>
-      <TableContainer component={Paper}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Series</TableCell>
-              <TableCell align="right">Races</TableCell>
-              <TableCell align="right">Wins</TableCell>
-              <TableCell align="right">Podiums</TableCell>
-              <TableCell align="right">Points</TableCell>
-              <TableCell align="right">Avg Finish</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {seriesStats.map((series) => (
-              <TableRow key={series.name}>
-                <TableCell>{series.name}</TableCell>
-                <TableCell align="right">{series.totalRaces}</TableCell>
-                <TableCell align="right">{series.wins}</TableCell>
-                <TableCell align="right">{series.podiums}</TableCell>
-                <TableCell align="right">{series.points}</TableCell>
-                <TableCell align="right">{series.averageFinish.toFixed(1)}</TableCell>
-              </TableRow>
+          {/* Class Overview */}
+          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Class Performance</Typography>
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {Object.entries(classStats).map(([className, stats]) => (
+              <ClassPerformanceCard key={className} className={className} stats={stats} />
             ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          </Grid>
+
+          {/* Track Statistics */}
+          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Top Tracks</Typography>
+          <Box sx={{ mb: 4 }}>
+            <TrackStatsTable stats={trackStats} />
+          </Box>
+
+          {/* Recent Races */}
+          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Recent Races</Typography>
+          <Box sx={{ mb: 4 }}>
+            <RecentRacesTable races={recentRaces} />
+          </Box>
+
+          {/* Series Statistics */}
+          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Series Performance</Typography>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Series</TableCell>
+                  <TableCell align="right">Races</TableCell>
+                  <TableCell align="right">Wins</TableCell>
+                  <TableCell align="right">Podiums</TableCell>
+                  <TableCell align="right">Points</TableCell>
+                  <TableCell align="right">Avg Finish</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {seriesStats.map((series) => (
+                  <TableRow key={series.name}>
+                    <TableCell>{series.name}</TableCell>
+                    <TableCell align="right">{series.totalRaces}</TableCell>
+                    <TableCell align="right">{series.wins}</TableCell>
+                    <TableCell align="right">{series.podiums}</TableCell>
+                    <TableCell align="right">{series.points}</TableCell>
+                    <TableCell align="right">{series.averageFinish.toFixed(1)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      ) : (
+        <PerformanceAnalytics races={races} />
+      )}
     </Box>
   )
 }
