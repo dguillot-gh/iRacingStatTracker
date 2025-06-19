@@ -48,6 +48,7 @@ import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import SeriesEditor from './pages/SeriesEditor'
 import { useTheme } from './hooks/useTheme'
+import Documentation from './pages/Documentation'
 
 // Create theme with color palette
 const createAppTheme = (mode: 'light' | 'dark') =>
@@ -182,6 +183,7 @@ export default function App() {
     { path: '/calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
     { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
     { path: '/series', label: 'Series Editor', icon: <SettingsIcon /> },
+    { path: '/docs', label: 'Documentation', icon: <SettingsIcon /> },
   ]
 
   const drawer = (
@@ -331,6 +333,10 @@ export default function App() {
               <Route
                 path="/series"
                 element={<SeriesEditor />}
+              />
+              <Route
+                path="/docs"
+                element={<Documentation />}
               />
             </Routes>
           </Box>
