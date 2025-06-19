@@ -1,6 +1,7 @@
 export type TrackType = 'oval' | 'road' | 'dirt'
 export type RaceClass = 'oval' | 'road'
 export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
+export type RaceSeries = 'Draftmasters' | 'Nascar Trucks' | 'Other'
 
 export interface Track {
   name: string
@@ -29,6 +30,7 @@ export interface RaceResult {
   totalSplits?: number
   strengthOfField?: number
   position?: number
+  finishPosition?: number // Adding this for compatibility
   averageLapTime?: number
   bestLapTime?: number
   leadLaps?: number

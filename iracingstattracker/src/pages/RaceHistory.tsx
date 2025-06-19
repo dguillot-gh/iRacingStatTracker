@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState, useCallback, memo, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -28,6 +28,7 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import { RaceEntry } from '../types/race'
 import { format } from 'date-fns'
+import { useRaces } from '../hooks/useRaces'
 
 interface RaceHistoryProps {
   races: RaceEntry[]
@@ -51,85 +52,251 @@ interface FormErrors {
   bestLapTime?: string
 }
 
-export default function RaceHistory({ races, onUpdateRace, onDeleteRace }: RaceHistoryProps) {
-  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+const RaceTableRow = memo(({ 
+  race, 
+  onEditClick, 
+  onDeleteClick 
+}: { 
+  race: RaceEntry; 
+  onEditClick: (race: RaceEntry) => void;
+  onDeleteClick: (id: string) => void;
+}) => {
+  const handleEdit = useCallback(() => {
+    onEditClick(race);
+  }, [race, onEditClick]);
+
+  const handleDelete = useCallback(() => {
+    onDeleteClick(race.id);
+  }, [race.id, onDeleteClick]);
+
+  return (
+    <TableRow>
+      <TableCell>{format(new Date(race.date), 'MMM d, yyyy')}</TableCell>
+      <TableCell>{race.series}</TableCell>
+      <TableCell>{race.track.name} ({race.track.type})</TableCell>
+      <TableCell>{race.vehicle}</TableCell>
+      <TableCell align="right">{race.result?.startPosition || '-'}</TableCell>
+      <TableCell align="right">{race.result?.finishPosition || '-'}</TableCell>
+      <TableCell align="right">{race.result?.incidentPoints || '-'}</TableCell>
+      <TableCell align="right">{race.result?.championshipPoints || '-'}</TableCell>
+      <TableCell align="right">
+        {race.result?.bestLapTime ? `${race.result.bestLapTime.toFixed(3)}s` : '-'}
+      </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={1}>
+          <Tooltip title="Edit Result">
+            <IconButton size="small" onClick={handleEdit}>
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete Race">
+            <IconButton size="small" onClick={handleDelete} color="error">
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </TableCell>
+    </TableRow>
+  );
+});
+
+RaceTableRow.displayName = 'RaceTableRow';
+
+const EditDialog = memo(({ 
+  isOpen, 
+  selectedRace, 
+  onClose, 
+  onSave 
+}: { 
+  isOpen: boolean;
+  selectedRace: RaceEntry | null;
+  onClose: () => void;
+  onSave: (formData: RaceResultFormData) => void;
+}) => {
   const [formData, setFormData] = useState<RaceResultFormData>({
     finishPosition: '',
     startPosition: '',
     incidentPoints: '',
     championshipPoints: '',
     bestLapTime: '',
-  })
-  const [formErrors, setFormErrors] = useState<FormErrors>({})
+  });
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const handleEditClick = (race: RaceEntry) => {
-    setSelectedRace(race)
-    setFormData({
-      finishPosition: race.result?.finishPosition || '',
-      startPosition: race.result?.startPosition || '',
-      incidentPoints: race.result?.incidentPoints || '',
-      championshipPoints: race.result?.championshipPoints || '',
-      bestLapTime: race.result?.bestLapTime || '',
-    })
-    setFormErrors({})
-    setIsEditDialogOpen(true)
-  }
+  const validateForm = useCallback((): boolean => {
+    const errors: FormErrors = {};
+    let isValid = true;
 
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {}
-    let isValid = true
-
-    // Finish Position validation
     if (formData.finishPosition === '') {
-      errors.finishPosition = 'Finish position is required'
-      isValid = false
+      errors.finishPosition = 'Finish position is required';
+      isValid = false;
     } else if (formData.finishPosition < 1) {
-      errors.finishPosition = 'Position must be 1 or greater'
-      isValid = false
+      errors.finishPosition = 'Position must be 1 or greater';
+      isValid = false;
     }
 
-    // Start Position validation
     if (formData.startPosition === '') {
-      errors.startPosition = 'Start position is required'
-      isValid = false
+      errors.startPosition = 'Start position is required';
+      isValid = false;
     } else if (formData.startPosition < 1) {
-      errors.startPosition = 'Position must be 1 or greater'
-      isValid = false
+      errors.startPosition = 'Position must be 1 or greater';
+      isValid = false;
     }
 
-    // Incident Points validation
     if (formData.incidentPoints === '') {
-      errors.incidentPoints = 'Incident points are required'
-      isValid = false
+      errors.incidentPoints = 'Incident points are required';
+      isValid = false;
     } else if (formData.incidentPoints < 0) {
-      errors.incidentPoints = 'Incident points cannot be negative'
-      isValid = false
+      errors.incidentPoints = 'Incident points cannot be negative';
+      isValid = false;
     }
 
-    // Championship Points validation
     if (formData.championshipPoints === '') {
-      errors.championshipPoints = 'Championship points are required'
-      isValid = false
+      errors.championshipPoints = 'Championship points are required';
+      isValid = false;
     }
 
-    // Best Lap Time validation
     if (formData.bestLapTime === '') {
-      errors.bestLapTime = 'Best lap time is required'
-      isValid = false
+      errors.bestLapTime = 'Best lap time is required';
+      isValid = false;
     } else if (formData.bestLapTime <= 0) {
-      errors.bestLapTime = 'Lap time must be greater than 0'
-      isValid = false
+      errors.bestLapTime = 'Lap time must be greater than 0';
+      isValid = false;
     }
 
-    setFormErrors(errors)
-    return isValid
-  }
+    setFormErrors(errors);
+    return isValid;
+  }, [formData]);
 
-  const handleSave = () => {
-    if (!selectedRace || !validateForm()) return
+  const handleSave = useCallback(() => {
+    if (validateForm()) {
+      onSave(formData);
+    }
+  }, [formData, validateForm, onSave]);
 
-    onUpdateRace(selectedRace.id, {
+  const handleInputChange = useCallback((field: keyof RaceResultFormData, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value ? Number(value) : ''
+    }));
+  }, []);
+
+  // Reset form when dialog opens with new race
+  React.useEffect(() => {
+    if (selectedRace && isOpen) {
+      setFormData({
+        finishPosition: selectedRace.result?.finishPosition || '',
+        startPosition: selectedRace.result?.startPosition || '',
+        incidentPoints: selectedRace.result?.incidentPoints || '',
+        championshipPoints: selectedRace.result?.championshipPoints || '',
+        bestLapTime: selectedRace.result?.bestLapTime || '',
+      });
+      setFormErrors({});
+    }
+  }, [selectedRace, isOpen]);
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        {selectedRace ? (
+          <>Edit Race Result - {format(new Date(selectedRace.date), 'MMM d, yyyy')}</>
+        ) : (
+          'Edit Race Result'
+        )}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 2 }}>
+          <TextField
+            label="Start Position"
+            type="number"
+            value={formData.startPosition}
+            onChange={(e) => handleInputChange('startPosition', e.target.value)}
+            error={!!formErrors.startPosition}
+            helperText={formErrors.startPosition}
+            fullWidth
+            inputProps={{ min: 1 }}
+          />
+          <TextField
+            label="Finish Position"
+            type="number"
+            value={formData.finishPosition}
+            onChange={(e) => handleInputChange('finishPosition', e.target.value)}
+            error={!!formErrors.finishPosition}
+            helperText={formErrors.finishPosition}
+            fullWidth
+            inputProps={{ min: 1 }}
+          />
+          <TextField
+            label="Incident Points"
+            type="number"
+            value={formData.incidentPoints}
+            onChange={(e) => handleInputChange('incidentPoints', e.target.value)}
+            error={!!formErrors.incidentPoints}
+            helperText={formErrors.incidentPoints}
+            fullWidth
+            inputProps={{ min: 0 }}
+          />
+          <TextField
+            label="Championship Points"
+            type="number"
+            value={formData.championshipPoints}
+            onChange={(e) => handleInputChange('championshipPoints', e.target.value)}
+            error={!!formErrors.championshipPoints}
+            helperText={formErrors.championshipPoints}
+            fullWidth
+          />
+          <TextField
+            label="Best Lap Time (seconds)"
+            type="number"
+            value={formData.bestLapTime}
+            onChange={(e) => handleInputChange('bestLapTime', e.target.value)}
+            error={!!formErrors.bestLapTime}
+            helperText={formErrors.bestLapTime}
+            fullWidth
+            inputProps={{ min: 0, step: 0.001 }}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSave} variant="contained">Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
+
+EditDialog.displayName = 'EditDialog';
+
+const RaceHistory = memo(() => {
+  const { races, updateRace, deleteRace } = useRaces();
+  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  const completedRaces = useMemo(() => 
+    races
+      .filter(race => race.status === 'completed')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [races]
+  );
+
+  const handleEditClick = useCallback((race: RaceEntry) => {
+    setSelectedRace(race);
+    setIsEditDialogOpen(true);
+  }, []);
+
+  const handleDeleteClick = useCallback((id: string) => {
+    deleteRace(id);
+  }, [deleteRace]);
+
+  const handleDialogClose = useCallback(() => {
+    setIsEditDialogOpen(false);
+    setSelectedRace(null);
+  }, []);
+
+  const handleSave = useCallback((formData: RaceResultFormData) => {
+    if (!selectedRace) return;
+
+    updateRace({
+      ...selectedRace,
       status: 'completed',
       result: {
         finishPosition: formData.finishPosition as number,
@@ -138,20 +305,11 @@ export default function RaceHistory({ races, onUpdateRace, onDeleteRace }: RaceH
         championshipPoints: formData.championshipPoints as number,
         bestLapTime: formData.bestLapTime as number,
       },
-    })
+    });
 
-    setIsEditDialogOpen(false)
-    setSelectedRace(null)
-  }
-
-  const handleClose = () => {
-    setIsEditDialogOpen(false)
-    setSelectedRace(null)
-    setFormErrors({})
-  }
-
-  const completedRaces = races.filter(race => race.status === 'completed')
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    setIsEditDialogOpen(false);
+    setSelectedRace(null);
+  }, [selectedRace, updateRace]);
 
   return (
     <Box>
@@ -177,37 +335,12 @@ export default function RaceHistory({ races, onUpdateRace, onDeleteRace }: RaceH
           </TableHead>
           <TableBody>
             {completedRaces.map((race) => (
-              <TableRow key={race.id}>
-                <TableCell>{format(new Date(race.date), 'MMM d, yyyy')}</TableCell>
-                <TableCell>{race.series}</TableCell>
-                <TableCell>{race.track.name} ({race.track.type})</TableCell>
-                <TableCell>{race.vehicle}</TableCell>
-                <TableCell align="right">{race.result?.startPosition || '-'}</TableCell>
-                <TableCell align="right">{race.result?.finishPosition || '-'}</TableCell>
-                <TableCell align="right">{race.result?.incidentPoints || '-'}</TableCell>
-                <TableCell align="right">{race.result?.championshipPoints || '-'}</TableCell>
-                <TableCell align="right">
-                  {race.result?.bestLapTime ? `${race.result.bestLapTime.toFixed(3)}s` : '-'}
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1}>
-                    <Tooltip title="Edit Result">
-                      <IconButton size="small" onClick={() => handleEditClick(race)}>
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete Race">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => onDeleteRace(race.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </TableCell>
-              </TableRow>
+              <RaceTableRow
+                key={race.id}
+                race={race}
+                onEditClick={handleEditClick}
+                onDeleteClick={handleDeleteClick}
+              />
             ))}
             {completedRaces.length === 0 && (
               <TableRow>
@@ -220,74 +353,16 @@ export default function RaceHistory({ races, onUpdateRace, onDeleteRace }: RaceH
         </Table>
       </TableContainer>
 
-      <Dialog open={isEditDialogOpen} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {selectedRace ? (
-            <>Edit Race Result - {format(new Date(selectedRace.date), 'MMM d, yyyy')}</>
-          ) : (
-            'Edit Race Result'
-          )}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <TextField
-              label="Start Position"
-              type="number"
-              value={formData.startPosition}
-              onChange={(e) => setFormData({ ...formData, startPosition: e.target.value ? Number(e.target.value) : '' })}
-              error={!!formErrors.startPosition}
-              helperText={formErrors.startPosition}
-              fullWidth
-              inputProps={{ min: 1 }}
-            />
-            <TextField
-              label="Finish Position"
-              type="number"
-              value={formData.finishPosition}
-              onChange={(e) => setFormData({ ...formData, finishPosition: e.target.value ? Number(e.target.value) : '' })}
-              error={!!formErrors.finishPosition}
-              helperText={formErrors.finishPosition}
-              fullWidth
-              inputProps={{ min: 1 }}
-            />
-            <TextField
-              label="Incident Points"
-              type="number"
-              value={formData.incidentPoints}
-              onChange={(e) => setFormData({ ...formData, incidentPoints: e.target.value ? Number(e.target.value) : '' })}
-              error={!!formErrors.incidentPoints}
-              helperText={formErrors.incidentPoints}
-              fullWidth
-              inputProps={{ min: 0 }}
-            />
-            <TextField
-              label="Championship Points"
-              type="number"
-              value={formData.championshipPoints}
-              onChange={(e) => setFormData({ ...formData, championshipPoints: e.target.value ? Number(e.target.value) : '' })}
-              error={!!formErrors.championshipPoints}
-              helperText={formErrors.championshipPoints}
-              fullWidth
-            />
-            <TextField
-              label="Best Lap Time (seconds)"
-              type="number"
-              value={formData.bestLapTime}
-              onChange={(e) => setFormData({ ...formData, bestLapTime: e.target.value ? Number(e.target.value) : '' })}
-              error={!!formErrors.bestLapTime}
-              helperText={formErrors.bestLapTime}
-              fullWidth
-              inputProps={{ step: 0.001, min: 0.001 }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSave} variant="contained" color="primary">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EditDialog
+        isOpen={isEditDialogOpen}
+        selectedRace={selectedRace}
+        onClose={handleDialogClose}
+        onSave={handleSave}
+      />
     </Box>
-  )
-} 
+  );
+});
+
+RaceHistory.displayName = 'RaceHistory';
+
+export default RaceHistory; 

@@ -19,7 +19,9 @@ import {
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
 import { RaceEntry } from '../types/race'
+import { Series } from '../types/series'
 import { addDays } from 'date-fns'
+import { useSeries } from '../hooks/useSeries'
 
 interface RaceFormDialogProps {
   open: boolean
@@ -34,6 +36,7 @@ export default function RaceFormDialog({
   onSubmit,
   initialData,
 }: RaceFormDialogProps) {
+  const { series } = useSeries();
   const [formData, setFormData] = useState<RaceEntry>({
     id: crypto.randomUUID(),
     series: '',
@@ -48,6 +51,7 @@ export default function RaceFormDialog({
     status: 'upcoming',
     class: 'oval',
   })
+  const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [isMultiDay, setIsMultiDay] = useState(false)
   const [isWeeklyRecurrence, setIsWeeklyRecurrence] = useState(false)
 
@@ -56,8 +60,26 @@ export default function RaceFormDialog({
       setFormData(initialData)
       setIsMultiDay(!!initialData.endDate)
       setIsWeeklyRecurrence(false) // Reset recurrence when editing
+      const foundSeries = series.find(s => s.name === initialData.series);
+      setSelectedSeries(foundSeries || null);
     }
-  }, [initialData])
+  }, [initialData, series])
+
+  useEffect(() => {
+    if (selectedSeries) {
+      setFormData(prev => ({
+        ...prev,
+        series: selectedSeries.name,
+        class: selectedSeries.category === 'dirt_oval' ? 'dirt_oval' : 
+               selectedSeries.category === 'dirt_road' ? 'dirt_road' : 
+               selectedSeries.category === 'road' ? 'road' : 'oval',
+        track: {
+          ...prev.track,
+          type: selectedSeries.defaultTrackType,
+        },
+      }));
+    }
+  }, [selectedSeries]);
 
   const handleSubmit = () => {
     if (!formData.series || !formData.track.name) return
@@ -95,24 +117,34 @@ export default function RaceFormDialog({
             <FormControl fullWidth>
               <InputLabel>Series</InputLabel>
               <Select
-                value={formData.series}
+                value={selectedSeries?.id || ''}
                 label="Series"
-                onChange={(e) => setFormData({ ...formData, series: e.target.value })}
+                onChange={(e) => {
+                  const selected = series.find(s => s.id === e.target.value);
+                  setSelectedSeries(selected || null);
+                }}
               >
-                <MenuItem value="Draftmasters">Draftmasters</MenuItem>
-                <MenuItem value="Nascar Trucks">Nascar Trucks</MenuItem>
-                <MenuItem value="Other">Other</MenuItem>
+                {series.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Vehicle"
-              value={formData.vehicle}
-              onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
-            />
+            <FormControl fullWidth>
+              <InputLabel>Vehicle</InputLabel>
+              <Select
+                value={formData.vehicle}
+                label="Vehicle"
+                onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
+                disabled={!selectedSeries}
+              >
+                {selectedSeries?.cars.map((car) => (
+                  <MenuItem key={car} value={car}>{car}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
 
           <Grid item xs={12} md={6}>
@@ -122,7 +154,7 @@ export default function RaceFormDialog({
               label="Week"
               value={formData.week}
               onChange={(e) => setFormData({ ...formData, week: parseInt(e.target.value) })}
-              inputProps={{ min: 1, max: 13 }}
+              inputProps={{ min: 1, max: selectedSeries?.seasonLength || 13 }}
             />
           </Grid>
 
