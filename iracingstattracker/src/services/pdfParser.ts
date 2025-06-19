@@ -57,6 +57,7 @@ export const PdfParserService = {
               name: entry.track,
               type: entry.trackType || determineTrackType(entry.track)
             },
+            class: entry.trackType === 'oval' ? 'oval' : 'road',
             date: entry.date || new Date(),
             status: 'upcoming'
           })

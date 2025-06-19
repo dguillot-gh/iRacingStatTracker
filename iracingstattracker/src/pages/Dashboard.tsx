@@ -278,9 +278,8 @@ const DashboardComponent = () => {
       .slice(0, 5)
   }, [races])
 
-  // Class Statistics (Oval vs Road)
+  // Class Statistics
   const classStats = useMemo(() => {
-    const completedRaces = races.filter(race => race.status === 'completed')
     const stats: Record<RaceClass, ClassStats> = {
       oval: {
         totalRaces: 0,
@@ -300,32 +299,45 @@ const DashboardComponent = () => {
         averageFinish: 0,
         bestFinish: Infinity,
       },
+      dirt_road: {
+        totalRaces: 0,
+        wins: 0,
+        podiums: 0,
+        winRate: 0,
+        podiumRate: 0,
+        averageFinish: 0,
+        bestFinish: Infinity,
+      },
+      dirt_oval: {
+        totalRaces: 0,
+        wins: 0,
+        podiums: 0,
+        winRate: 0,
+        podiumRate: 0,
+        averageFinish: 0,
+        bestFinish: Infinity,
+      }
     }
 
+    const completedRaces = races.filter(race => race.status === 'completed')
     completedRaces.forEach(race => {
-      // Default to track type if class is not set
-      const raceClass = race.class || (race.track.type === 'oval' ? 'oval' : 'road') as RaceClass
+      const raceClass = race.class
       const finishPos = race.result?.finishPosition || 0
-      
-      if (stats[raceClass]) {  // Make sure the class exists in our stats object
+
+      if (finishPos > 0) {
         stats[raceClass].totalRaces++
-        if (finishPos === 1) stats[raceClass].wins++
-        if (finishPos <= 3) stats[raceClass].podiums++
-        stats[raceClass].averageFinish = (
-          (stats[raceClass].averageFinish * (stats[raceClass].totalRaces - 1) + finishPos) / 
-          stats[raceClass].totalRaces
-        )
-        stats[raceClass].bestFinish = Math.min(stats[raceClass].bestFinish, finishPos || Infinity)
+        stats[raceClass].wins += finishPos === 1 ? 1 : 0
+        stats[raceClass].podiums += finishPos <= 3 ? 1 : 0
+        stats[raceClass].bestFinish = Math.min(stats[raceClass].bestFinish, finishPos)
+        stats[raceClass].averageFinish = (stats[raceClass].averageFinish * (stats[raceClass].totalRaces - 1) + finishPos) / stats[raceClass].totalRaces
       }
     })
 
     // Calculate rates
-    Object.keys(stats).forEach(key => {
-      const classKey = key as RaceClass
-      const classStat = stats[classKey]
-      if (classStat.totalRaces > 0) {
-        classStat.winRate = (classStat.wins / classStat.totalRaces) * 100
-        classStat.podiumRate = (classStat.podiums / classStat.totalRaces) * 100
+    Object.values(stats).forEach(stat => {
+      if (stat.totalRaces > 0) {
+        stat.winRate = (stat.wins / stat.totalRaces) * 100
+        stat.podiumRate = (stat.podiums / stat.totalRaces) * 100
       }
     })
 

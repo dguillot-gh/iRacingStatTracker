@@ -1,7 +1,7 @@
 export type TrackType = 'oval' | 'road' | 'dirt'
 export type RaceClass = 'oval' | 'road' | 'dirt_road' | 'dirt_oval'
 export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
-export type RaceSeries = 'Draftmasters' | 'Nascar Trucks' | 'Other'
+export type RaceSeries = string
 
 export interface Track {
   name: string
