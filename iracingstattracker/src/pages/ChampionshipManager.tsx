@@ -90,14 +90,16 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
 
       if (race.status === 'completed' && race.result) {
         current.completedRaces++
-        current.totalPoints += race.result.championshipPoints
+        current.totalPoints += race.result.championshipPoints || 0
         if (race.result.finishPosition === 1) current.wins++
-        if (race.result.finishPosition <= 3) current.podiums++
+        if (race.result.finishPosition && race.result.finishPosition <= 3) current.podiums++
         current.averageFinish = (
-          (current.averageFinish * (current.completedRaces - 1) + race.result.finishPosition) /
+          (current.averageFinish * (current.completedRaces - 1) + (race.result.finishPosition || 0)) /
           current.completedRaces
         )
-        current.bestFinish = Math.min(current.bestFinish, race.result.finishPosition)
+        if (race.result.finishPosition) {
+          current.bestFinish = Math.min(current.bestFinish, race.result.finishPosition)
+        }
         
         if (race.result.strengthOfField) {
           current.strengthOfField = (

@@ -249,9 +249,9 @@ export default function Documentation() {
 
   const handleDocSelect = (path: string[]) => {
     setSelectedDoc(path);
-    let currentNode: DocNode = docs as any;
-    for (const segment of path) {
-      currentNode = currentNode[segment] as DocNode;
+    let currentNode: DocNode = docs[path[0] as keyof typeof docs];
+    for (let i = 1; i < path.length; i++) {
+      currentNode = currentNode.children[path[i]];
     }
     setContent(currentNode.content);
   };

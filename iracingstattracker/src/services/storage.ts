@@ -8,7 +8,19 @@ const STORAGE_KEYS = {
 
 export interface AppSettings {
   theme: 'light' | 'dark'
-  notifications: boolean
+  iRacingCredentials?: {
+    username: string
+    password: string
+  }
+  autoRefreshInterval: number
+  defaultView: 'dashboard' | 'raceHistory' | 'series'
+  notifications: {
+    enabled: boolean
+    sound: boolean
+    desktop: boolean
+  }
+  autoBackup: boolean
+  backupFrequency: string
   calendarSync: boolean
 }
 
@@ -45,8 +57,16 @@ export class StorageService {
       if (!settingsJson) {
         return {
           theme: 'dark',
-          notifications: false,
-          calendarSync: false,
+          autoRefreshInterval: 60000,
+          defaultView: 'dashboard',
+          notifications: {
+            enabled: false,
+            sound: false,
+            desktop: false
+          },
+          autoBackup: false,
+          backupFrequency: 'daily',
+          calendarSync: false
         }
       }
 
@@ -55,8 +75,16 @@ export class StorageService {
       console.error('Failed to load settings:', error)
       return {
         theme: 'dark',
-        notifications: false,
-        calendarSync: false,
+        autoRefreshInterval: 60000,
+        defaultView: 'dashboard',
+        notifications: {
+          enabled: false,
+          sound: false,
+          desktop: false
+        },
+        autoBackup: false,
+        backupFrequency: 'daily',
+        calendarSync: false
       }
     }
   }

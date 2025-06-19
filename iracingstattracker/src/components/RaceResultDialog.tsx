@@ -41,7 +41,7 @@ export default function RaceResultDialog({
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
-                {race.series} at {race.track}
+                {race.series} at {race.track.name}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {new Date(race.date + 'T' + race.startTime).toLocaleString()}
