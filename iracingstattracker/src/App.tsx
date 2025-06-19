@@ -4,8 +4,6 @@ import {
   ThemeProvider,
   createTheme,
   Box,
-  Tab,
-  Tabs,
   Container,
   CssBaseline,
   IconButton,
@@ -20,7 +18,6 @@ import {
   Typography,
   Menu,
   MenuItem,
-  Button,
 } from '@mui/material'
 import {
   Dashboard as DashboardIcon,
@@ -89,8 +86,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState<AppSettings>({
     theme: 'dark',
-    notifications: false,
-    calendarSync: false,
+    autoRefreshInterval: 60000,
+    defaultView: 'dashboard',
+    notifications: {
+      enabled: false,
+      sound: false,
+      desktop: false
+    },
+    autoBackup: false,
+    backupFrequency: 'daily',
+    calendarSync: false
   })
   
   const theme = createAppTheme(themeMode)

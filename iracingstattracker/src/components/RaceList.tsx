@@ -39,7 +39,7 @@ const RaceItem = memo(({ race, onEdit }: RaceItemProps) => {
             </Typography>
             <br />
             <Typography component="span" variant="body2" color="textSecondary">
-              Track: {race.track}
+              Track: {race.track.name}
             </Typography>
           </>
         }

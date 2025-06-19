@@ -210,21 +210,6 @@ const Settings = memo(() => {
     reader.readAsText(file)
   }, [setSettings])
 
-  const handleSave = () => {
-    const newSettings: AppSettings = {
-      theme: settings.theme,
-      iRacingCredentials: settings.iRacingCredentials,
-      autoRefreshInterval: settings.autoRefreshInterval,
-      defaultView: settings.defaultView,
-      notifications: settings.notifications,
-      autoBackup: settings.autoBackup,
-      backupFrequency: settings.backupFrequency,
-      calendarSync: settings.calendarSync || false
-    }
-    onSettingsUpdate(newSettings)
-    setOpen(false)
-  }
-
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Settings</Typography>
@@ -253,30 +238,63 @@ const Settings = memo(() => {
             <FormControlLabel
               control={
                 <Switch
-                  checked={settings.notifications}
-                  onChange={(e) => handleSettingChange('notifications', e.target.checked)}
+                  checked={settings.notifications.enabled}
+                  onChange={(e) => handleSettingChange('notifications', {
+                    ...settings.notifications,
+                    enabled: e.target.checked
+                  })}
                 />
               }
               label="Enable Notifications"
             />
+            {settings.notifications.enabled && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={settings.notifications.sound}
+                      onChange={(e) => handleSettingChange('notifications', {
+                        ...settings.notifications,
+                        sound: e.target.checked
+                      })}
+                    />
+                  }
+                  label="Sound Notifications"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={settings.notifications.desktop}
+                      onChange={(e) => handleSettingChange('notifications', {
+                        ...settings.notifications,
+                        desktop: e.target.checked
+                      })}
+                    />
+                  }
+                  label="Desktop Notifications"
+                />
+              </>
+            )}
           </FormGroup>
         </Paper>
 
+        {/* Backup Section */}
         <BackupSection onBackup={handleBackup} onRestore={handleRestore} />
 
+        {/* Export Section */}
+        <ExportSection />
+
         {backupSuccess !== null && (
-          <Alert severity={backupSuccess ? 'success' : 'error'}>
-            {backupSuccess ? 'Backup completed successfully!' : 'Backup failed. Please try again.'}
+          <Alert severity={backupSuccess ? "success" : "error"}>
+            {backupSuccess ? "Backup completed successfully" : "Backup failed"}
           </Alert>
         )}
 
         {restoreSuccess !== null && (
-          <Alert severity={restoreSuccess ? 'success' : 'error'}>
-            {restoreSuccess ? 'Restore completed successfully!' : 'Restore failed. Please try again.'}
+          <Alert severity={restoreSuccess ? "success" : "error"}>
+            {restoreSuccess ? "Restore completed successfully" : "Restore failed"}
           </Alert>
         )}
-
-        <ExportSection />
       </Stack>
     </Box>
   )
