@@ -159,8 +159,35 @@ const Settings = memo(() => {
   const [restoreSuccess, setRestoreSuccess] = useState<boolean | null>(null)
 
   const handleSettingChange = useCallback((key: keyof typeof settings, value: any) => {
-    setSettings({ ...settings, [key]: value })
-  }, [settings, setSettings])
+    const newSettings: AppSettings = {
+      ...settings,
+      [key]: value,
+      autoBackup: settings.autoBackup || false,
+      backupFrequency: settings.backupFrequency || 'daily',
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
+
+  const handleBackupChange = useCallback((checked: boolean) => {
+    const newSettings: AppSettings = {
+      ...settings,
+      autoBackup: checked,
+      backupFrequency: settings.backupFrequency || 'daily',
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
+
+  const handleBackupFrequencyChange = useCallback((value: string) => {
+    const newSettings: AppSettings = {
+      ...settings,
+      autoBackup: settings.autoBackup || false,
+      backupFrequency: value,
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
 
   const handleBackup = useCallback(() => {
     try {

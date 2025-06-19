@@ -195,7 +195,7 @@ export default function PerformanceAnalytics({ races }: PerformanceAnalyticsProp
               />
               <YAxis />
               <Tooltip
-                formatter={(value, name) => [
+                formatter={(value: number, name: string) => [
                   name === 'averageFinish' ? `P${value.toFixed(1)}` : value,
                   name === 'averageFinish' ? 'Average Finish' : 'Races'
                 ]}

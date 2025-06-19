@@ -11,8 +11,16 @@ interface SettingsState {
 const initialState: SettingsState = {
   settings: {
     theme: 'dark',
-    notifications: false,
-    calendarSync: false,
+    autoRefreshInterval: 60000,
+    defaultView: 'dashboard',
+    notifications: {
+      enabled: false,
+      sound: false,
+      desktop: false
+    },
+    autoBackup: false,
+    backupFrequency: 'daily',
+    calendarSync: false
   },
   isLoading: false,
   error: null,
@@ -31,7 +39,10 @@ export const settingsSlice = createSlice({
       StorageService.saveSettings(state.settings);
     },
     toggleNotifications: (state) => {
-      state.settings.notifications = !state.settings.notifications;
+      state.settings.notifications = {
+        ...state.settings.notifications,
+        enabled: !state.settings.notifications.enabled
+      };
       StorageService.saveSettings(state.settings);
     },
     toggleCalendarSync: (state) => {
