@@ -44,7 +44,6 @@ import { StorageService, AppSettings } from './services/storage'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import SeriesEditor from './pages/SeriesEditor'
-import { useTheme } from './hooks/useTheme'
 import Documentation from './pages/Documentation'
 
 // Create theme with color palette
@@ -260,13 +259,12 @@ export default function App() {
             component="nav"
             sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}
           >
-            {/* Mobile drawer */}
             <Drawer
               variant="temporary"
               open={mobileOpen}
               onClose={handleDrawerToggle}
               ModalProps={{
-                keepMounted: true, // Better open performance on mobile.
+                keepMounted: true,
               }}
               sx={{
                 display: { xs: 'block', md: 'none' },
@@ -278,7 +276,6 @@ export default function App() {
             >
               {drawer}
             </Drawer>
-            {/* Desktop drawer */}
             <Drawer
               variant="permanent"
               sx={{
@@ -300,14 +297,28 @@ export default function App() {
               flexGrow: 1,
               p: 3,
               width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-              mt: 8,
             }}
           >
+            <Toolbar />
             <Routes>
               <Route path="/" element={<Dashboard races={races} />} />
               <Route
                 path="/planner"
-                element={<RacePlanner races={races} onRaceUpdate={handleRaceUpdate} />}
+                element={
+                  <RacePlanner
+                    races={races}
+                    onUpdateRace={(id, updates) => {
+                      const updatedRaces = races.map(race =>
+                        race.id === id ? { ...race, ...updates } : race
+                      )
+                      handleRaceUpdate(updatedRaces)
+                    }}
+                    onDeleteRace={(id) => {
+                      const updatedRaces = races.filter(race => race.id !== id)
+                      handleRaceUpdate(updatedRaces)
+                    }}
+                  />
+                }
               />
               <Route
                 path="/history"
@@ -335,25 +346,18 @@ export default function App() {
                   />
                 }
               />
-              <Route
-                path="/series"
-                element={<SeriesEditor />}
-              />
-              <Route
-                path="/docs"
-                element={<Documentation />}
-              />
+              <Route path="/series" element={<SeriesEditor />} />
+              <Route path="/docs" element={<Documentation />} />
             </Routes>
           </Box>
-        </Box>
 
-        <SettingsDialog
-          open={settingsOpen}
-          onClose={handleSettingsClose}
-          onThemeChange={handleThemeToggle}
-          isDarkMode={themeMode === 'dark'}
-          onDataImport={setRaces}
-        />
+          <SettingsDialog
+            open={settingsOpen}
+            onClose={handleSettingsClose}
+            settings={settings}
+            onSettingsUpdate={handleSettingsUpdate}
+          />
+        </Box>
       </LocalizationProvider>
     </ThemeProvider>
   )
