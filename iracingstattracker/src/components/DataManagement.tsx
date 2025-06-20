@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Button,
   Dialog,
@@ -13,15 +13,28 @@ import {
   Tabs,
   Box,
   CircularProgress,
+  TextField,
+  Menu,
+  MenuItem,
+  Paper,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  SelectChangeEvent,
 } from '@mui/material'
 import {
   FileUpload as FileUploadIcon,
   FileDownload as FileDownloadIcon,
   Close as CloseIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
 } from '@mui/icons-material'
 import { RaceEntry } from '../types/race'
 import { PdfParserService } from '../services/pdfParser'
 import * as pdfjsLib from 'pdfjs-dist'
+import { searchRaces, exportToCSV, exportToJSON, SearchOptions } from '../utils/search'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
@@ -29,38 +42,66 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 interface DataManagementProps {
   races: RaceEntry[]
   onImport: (races: RaceEntry[]) => void
+  onSearchResults?: (results: RaceEntry[]) => void
 }
 
 type ImportType = 'json' | 'pdf'
 
-export default function DataManagement({ races, onImport }: DataManagementProps) {
+export default function DataManagement({ races, onImport, onSearchResults }: DataManagementProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [importType, setImportType] = useState<ImportType>('json')
   const [isLoading, setIsLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null)
+  const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null)
+  const [filters, setFilters] = useState<SearchOptions>({})
 
-  const handleExport = () => {
-    try {
-      const exportData = {
-        version: '1.0',
-        timestamp: new Date().toISOString(),
-        races: races,
-      }
+  // Search results
+  const filteredRaces = useMemo(() => {
+    const results = searchRaces(races, searchTerm, filters)
+    return results
+  }, [races, searchTerm, filters])
 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json',
-      })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `iracing-schedule-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      setError('Failed to export data. Please try again.')
-    }
+  // Use useEffect to notify parent of search results
+  useEffect(() => {
+    onSearchResults?.(filteredRaces)
+  }, [filteredRaces, onSearchResults])
+
+  // Handle filter changes
+  const handleFilterChange = (key: keyof SearchOptions, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
+  const handleExportCSV = () => {
+    const csv = exportToCSV(filteredRaces)
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `race_data_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    setExportAnchor(null)
+  }
+
+  const handleExportJSON = () => {
+    const json = exportToJSON(filteredRaces)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `race_data_${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    setExportAnchor(null)
   }
 
   const handleJsonImport = async (file: File) => {
@@ -138,6 +179,40 @@ export default function DataManagement({ races, onImport }: DataManagementProps)
 
   return (
     <>
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {/* Search field */}
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search races..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          {/* Filter button */}
+          <Tooltip title="Filter">
+            <IconButton onClick={(e) => setFilterAnchor(e.currentTarget)}>
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Export button */}
+          <Tooltip title="Export">
+            <IconButton onClick={(e) => setExportAnchor(e.currentTarget)}>
+              <FileDownloadIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Paper>
+
       <Stack direction="row" spacing={1}>
         <Tooltip title="Import Schedule">
           <Button
@@ -151,7 +226,10 @@ export default function DataManagement({ races, onImport }: DataManagementProps)
         <Tooltip title="Export Schedule">
           <Button
             startIcon={<FileDownloadIcon />}
-            onClick={handleExport}
+            onClick={() => {
+              handleExportCSV()
+              handleExportJSON()
+            }}
             variant="outlined"
           >
             Export
@@ -225,6 +303,67 @@ export default function DataManagement({ races, onImport }: DataManagementProps)
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Filter menu */}
+      <Menu
+        anchorEl={filterAnchor}
+        open={Boolean(filterAnchor)}
+        onClose={() => setFilterAnchor(null)}
+      >
+        <Box sx={{ p: 2, minWidth: 300 }}>
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Series</InputLabel>
+            <Select
+              value={filters.series || ''}
+              label="Series"
+              onChange={(e: SelectChangeEvent<string>) => 
+                handleFilterChange('series', e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="Draftmasters">Draftmasters</MenuItem>
+              <MenuItem value="Nascar Trucks">Nascar Trucks</MenuItem>
+              <MenuItem value="Other">Other</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <DatePicker
+              label="Start Date"
+              value={filters.startDate || null}
+              onChange={(date) => handleFilterChange('startDate', date)}
+            />
+          </FormControl>
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <DatePicker
+              label="End Date"
+              value={filters.endDate || null}
+              onChange={(date) => handleFilterChange('endDate', date)}
+            />
+          </FormControl>
+
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={() => {
+              setFilters({})
+              setFilterAnchor(null)
+            }}
+          >
+            Clear Filters
+          </Button>
+        </Box>
+      </Menu>
+
+      {/* Export menu */}
+      <Menu
+        anchorEl={exportAnchor}
+        open={Boolean(exportAnchor)}
+        onClose={() => setExportAnchor(null)}
+      >
+        <MenuItem onClick={handleExportCSV}>Export as CSV</MenuItem>
+        <MenuItem onClick={handleExportJSON}>Export as JSON</MenuItem>
+      </Menu>
     </>
   )
 } 

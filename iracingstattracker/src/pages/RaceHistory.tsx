@@ -30,6 +30,7 @@ import { RaceEntry } from '../types/race'
 import { format } from 'date-fns'
 import { useRaces } from '../hooks/useRaces'
 import RaceFormDialog from '../components/RaceFormDialog'
+import DataManagement from '../components/DataManagement'
 
 interface RaceHistoryProps {
   races: RaceEntry[]
@@ -269,18 +270,11 @@ const EditDialog = memo(({
 EditDialog.displayName = 'EditDialog';
 
 export default function RaceHistory() {
-  const { races, addRace, updateRace, deleteRace } = useRaces()
-  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
+  const { races, updateRace, deleteRace, createRace } = useRaces()
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isRaceFormOpen, setIsRaceFormOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const completedRaces = useMemo(() => 
-    races
-      .filter(race => race.status === 'completed')
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [races]
-  )
+  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [filteredRaces, setFilteredRaces] = useState<RaceEntry[]>(races)
 
   const handleEditRace = useCallback((race: RaceEntry) => {
     setSelectedRace(race)
@@ -289,34 +283,10 @@ export default function RaceHistory() {
 
   const handleCreateRace = useCallback(() => {
     setSelectedRace(null)
-    setIsRaceFormOpen(true)
+    setIsCreateDialogOpen(true)
   }, [])
 
-  const handleRaceFormSubmit = useCallback(async (race: RaceEntry) => {
-    try {
-      if (selectedRace) {
-        await updateRace(race)
-      } else {
-        await addRace(race)
-      }
-      setIsRaceFormOpen(false)
-      setSelectedRace(null)
-    } catch (error) {
-      console.error('Failed to save race:', error)
-      setError('Failed to save race. Please try again.')
-    }
-  }, [selectedRace, updateRace, addRace])
-
-  const handleDeleteRace = useCallback(async (id: string) => {
-    try {
-      await deleteRace(id)
-    } catch (error) {
-      console.error('Failed to delete race:', error)
-      setError('Failed to delete race. Please try again.')
-    }
-  }, [deleteRace])
-
-  const handleSaveResult = useCallback(async (formData: RaceResultFormData) => {
+  const handleSaveEdit = useCallback(async (formData: RaceResultFormData) => {
     if (!selectedRace) return
 
     try {
@@ -338,27 +308,39 @@ export default function RaceHistory() {
     }
   }, [selectedRace, updateRace])
 
+  const handleDeleteRace = useCallback(async (id: string) => {
+    try {
+      await deleteRace(id)
+    } catch (error) {
+      console.error('Failed to delete race:', error)
+      setError('Failed to delete race. Please try again.')
+    }
+  }, [deleteRace])
+
+  const handleSearchResults = useCallback((results: RaceEntry[]) => {
+    setFilteredRaces(results);
+  }, []);
+
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">Race History</Typography>
+    <Box sx={{ p: 3 }}>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+        <Typography variant="h5" component="h1">Race History</Typography>
         <Button
           variant="contained"
-          color="primary"
           startIcon={<AddIcon />}
-          onClick={handleCreateRace}
+          onClick={() => setIsCreateDialogOpen(true)}
         >
           Add Race
         </Button>
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+      <DataManagement
+        races={races}
+        onImport={createRace}
+        onSearchResults={handleSearchResults}
+      />
 
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} sx={{ mt: 2 }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -375,37 +357,42 @@ export default function RaceHistory() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {completedRaces.map((race) => (
-              <RaceTableRow
-                key={race.id}
-                race={race}
-                onEditClick={handleEditRace}
-                onDeleteClick={handleDeleteRace}
-              />
-            ))}
-            {completedRaces.length === 0 && (
+            {filteredRaces.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} align="center">
-                  No completed races found
+                  <Typography variant="body1" sx={{ py: 2 }}>
+                    No races found matching your search criteria
+                  </Typography>
                 </TableCell>
               </TableRow>
+            ) : (
+              filteredRaces.map(race => (
+                <RaceTableRow
+                  key={race.id}
+                  race={race}
+                  onEditClick={handleEditRace}
+                  onDeleteClick={handleDeleteRace}
+                />
+              ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
 
+      <RaceFormDialog
+        open={isCreateDialogOpen}
+        onClose={() => setIsCreateDialogOpen(false)}
+        onSubmit={handleCreateRace}
+      />
+
       <EditDialog
         isOpen={isEditDialogOpen}
         selectedRace={selectedRace}
-        onClose={() => setIsEditDialogOpen(false)}
-        onSave={handleSaveResult}
-      />
-
-      <RaceFormDialog
-        open={isRaceFormOpen}
-        onClose={() => setIsRaceFormOpen(false)}
-        onSubmit={handleRaceFormSubmit}
-        initialData={selectedRace || undefined}
+        onClose={() => {
+          setIsEditDialogOpen(false)
+          setSelectedRace(null)
+        }}
+        onSave={handleSaveEdit}
       />
     </Box>
   )
