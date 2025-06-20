@@ -10,4 +10,11 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    host: true, // Listen on all network interfaces
+    port: 5173,
+    watch: {
+      usePolling: true, // Needed for Docker on Windows/macOS
+    },
+  },
 })
