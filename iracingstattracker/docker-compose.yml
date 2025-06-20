@@ -4,7 +4,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
     environment:
@@ -13,9 +13,9 @@ services:
       - ./src:/app/src
       - ./public:/app/public
       - ./index.html:/app/index.html
-      - ./package.json:/app/package.json
-      - ./tsconfig.json:/app/tsconfig.json
       - ./vite.config.ts:/app/vite.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./package.json:/app/package.json
     restart: unless-stopped
 
 volumes:
