@@ -31,11 +31,19 @@ export class StorageService {
       if (!racesJson) return []
 
       const races = JSON.parse(racesJson)
-      return races.map((race: any) => ({
+      const parsedRaces = races.map((race: any) => ({
         ...race,
         date: new Date(race.date),
         endDate: race.endDate ? new Date(race.endDate) : undefined,
       }))
+
+      // Validate the parsed races
+      if (!Array.isArray(parsedRaces)) {
+        console.error('Invalid races data format')
+        return []
+      }
+
+      return parsedRaces
     } catch (error) {
       console.error('Failed to load races:', error)
       return []
@@ -43,12 +51,25 @@ export class StorageService {
   }
 
   static async saveRaces(races: RaceEntry[]): Promise<void> {
-    try {
-      localStorage.setItem(STORAGE_KEYS.RACES, JSON.stringify(races))
-    } catch (error) {
-      console.error('Failed to save races:', error)
-      throw error
-    }
+    return new Promise((resolve, reject) => {
+      try {
+        if (!Array.isArray(races)) {
+          throw new Error('Invalid races data format')
+        }
+
+        const racesToSave = races.map(race => ({
+          ...race,
+          date: race.date.toISOString(),
+          endDate: race.endDate?.toISOString(),
+        }))
+
+        localStorage.setItem(STORAGE_KEYS.RACES, JSON.stringify(racesToSave))
+        resolve()
+      } catch (error) {
+        console.error('Failed to save races:', error)
+        reject(error)
+      }
+    })
   }
 
   static async getSettings(): Promise<AppSettings> {
@@ -70,7 +91,8 @@ export class StorageService {
         }
       }
 
-      return JSON.parse(settingsJson)
+      const settings = JSON.parse(settingsJson)
+      return settings
     } catch (error) {
       console.error('Failed to load settings:', error)
       return {
@@ -90,20 +112,26 @@ export class StorageService {
   }
 
   static async saveSettings(settings: AppSettings): Promise<void> {
-    try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings))
-    } catch (error) {
-      console.error('Failed to save settings:', error)
-      throw error
-    }
+    return new Promise((resolve, reject) => {
+      try {
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings))
+        resolve()
+      } catch (error) {
+        console.error('Failed to save settings:', error)
+        reject(error)
+      }
+    })
   }
 
   static async clearStorage(): Promise<void> {
-    try {
-      localStorage.clear()
-    } catch (error) {
-      console.error('Failed to clear storage:', error)
-      throw error
-    }
+    return new Promise((resolve, reject) => {
+      try {
+        localStorage.clear()
+        resolve()
+      } catch (error) {
+        console.error('Failed to clear storage:', error)
+        reject(error)
+      }
+    })
   }
 } 

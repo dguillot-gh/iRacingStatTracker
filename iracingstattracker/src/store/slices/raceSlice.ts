@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { RaceEntry } from '../../types/race';
 import { StorageService } from '../../services/storage';
 
@@ -14,28 +14,49 @@ const initialState: RaceState = {
   error: null,
 };
 
+// Async thunks
+export const loadRaces = createAsyncThunk(
+  'race/loadRaces',
+  async () => {
+    const races = await StorageService.getRaces();
+    return races;
+  }
+);
+
+export const saveRace = createAsyncThunk(
+  'race/saveRace',
+  async (race: RaceEntry) => {
+    const currentRaces = await StorageService.getRaces();
+    const updatedRaces = [...currentRaces, race];
+    await StorageService.saveRaces(updatedRaces);
+    return race;
+  }
+);
+
+export const updateRaceAsync = createAsyncThunk(
+  'race/updateRaceAsync',
+  async (race: RaceEntry) => {
+    const currentRaces = await StorageService.getRaces();
+    const updatedRaces = currentRaces.map(r => r.id === race.id ? race : r);
+    await StorageService.saveRaces(updatedRaces);
+    return race;
+  }
+);
+
+export const deleteRaceAsync = createAsyncThunk(
+  'race/deleteRaceAsync',
+  async (raceId: string) => {
+    const currentRaces = await StorageService.getRaces();
+    const updatedRaces = currentRaces.filter(r => r.id !== raceId);
+    await StorageService.saveRaces(updatedRaces);
+    return raceId;
+  }
+);
+
 export const raceSlice = createSlice({
   name: 'race',
   initialState,
   reducers: {
-    setRaces: (state, action: PayloadAction<RaceEntry[]>) => {
-      state.races = action.payload;
-    },
-    addRace: (state, action: PayloadAction<RaceEntry>) => {
-      state.races.push(action.payload);
-      StorageService.saveRaces(state.races);
-    },
-    updateRace: (state, action: PayloadAction<RaceEntry>) => {
-      const index = state.races.findIndex(race => race.id === action.payload.id);
-      if (index !== -1) {
-        state.races[index] = action.payload;
-        StorageService.saveRaces(state.races);
-      }
-    },
-    deleteRace: (state, action: PayloadAction<string>) => {
-      state.races = state.races.filter(race => race.id !== action.payload);
-      StorageService.saveRaces(state.races);
-    },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
@@ -43,7 +64,67 @@ export const raceSlice = createSlice({
       state.error = action.payload;
     },
   },
+  extraReducers: (builder) => {
+    // Load races
+    builder.addCase(loadRaces.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(loadRaces.fulfilled, (state, action) => {
+      state.races = action.payload;
+      state.isLoading = false;
+    });
+    builder.addCase(loadRaces.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.error.message || 'Failed to load races';
+    });
+
+    // Save race
+    builder.addCase(saveRace.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(saveRace.fulfilled, (state, action) => {
+      state.races.push(action.payload);
+      state.isLoading = false;
+    });
+    builder.addCase(saveRace.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.error.message || 'Failed to save race';
+    });
+
+    // Update race
+    builder.addCase(updateRaceAsync.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(updateRaceAsync.fulfilled, (state, action) => {
+      const index = state.races.findIndex(race => race.id === action.payload.id);
+      if (index !== -1) {
+        state.races[index] = action.payload;
+      }
+      state.isLoading = false;
+    });
+    builder.addCase(updateRaceAsync.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.error.message || 'Failed to update race';
+    });
+
+    // Delete race
+    builder.addCase(deleteRaceAsync.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(deleteRaceAsync.fulfilled, (state, action) => {
+      state.races = state.races.filter(race => race.id !== action.payload);
+      state.isLoading = false;
+    });
+    builder.addCase(deleteRaceAsync.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.error.message || 'Failed to delete race';
+    });
+  },
 });
 
-export const { setRaces, addRace, updateRace, deleteRace, setLoading, setError } = raceSlice.actions;
+export const { setLoading, setError } = raceSlice.actions;
 export default raceSlice.reducer; 
