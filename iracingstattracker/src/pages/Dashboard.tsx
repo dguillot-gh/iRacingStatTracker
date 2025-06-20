@@ -17,6 +17,9 @@ import {
   Divider,
   Tabs,
   Tab,
+  Button,
+  Stack,
+  Chip,
 } from '@mui/material'
 import {
   isAfter,
@@ -25,10 +28,15 @@ import {
   format,
   startOfYear,
   endOfYear,
+  addDays,
+  isPast,
+  isFuture,
+  differenceInDays,
 } from 'date-fns'
 import { useRaces } from '../hooks/useRaces'
 import { RaceEntry, Track, RaceClass } from '../types/race'
 import PerformanceAnalytics from '../components/PerformanceAnalytics'
+import { useNavigate } from 'react-router-dom'
 
 interface TrackStats {
   name: string
@@ -167,13 +175,135 @@ const RecentRacesTable = memo(({ races }: { races: RaceEntry[] }) => (
 
 RecentRacesTable.displayName = 'RecentRacesTable'
 
+const NextRaceCard = memo(({ race }: { race: RaceEntry }) => {
+  const navigate = useNavigate()
+  const daysUntil = differenceInDays(new Date(race.date), new Date())
+
+  return (
+    <Card>
+      <CardContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6">Next Race</Typography>
+          <Chip 
+            label={`In ${daysUntil} days`}
+            color="primary"
+            size="small"
+          />
+        </Stack>
+        <Typography variant="subtitle1" gutterBottom>{race.series}</Typography>
+        <Typography variant="body1" gutterBottom>{race.track.name}</Typography>
+        <Typography variant="body2" color="textSecondary" gutterBottom>
+          {format(new Date(race.date), 'MMMM d, yyyy')}
+        </Typography>
+        <Button 
+          variant="contained" 
+          size="small" 
+          onClick={() => navigate('/planner')}
+          sx={{ mt: 1 }}
+        >
+          View in Planner
+        </Button>
+      </CardContent>
+    </Card>
+  )
+})
+
+NextRaceCard.displayName = 'NextRaceCard'
+
+const PerformanceTrendCard = memo(({ races }: { races: RaceEntry[] }) => {
+  const recentRaces = races
+    .filter(race => race.status === 'completed')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5)
+
+  const trend = recentRaces.map(race => ({
+    date: format(new Date(race.date), 'MMM d'),
+    position: race.result?.finishPosition || 0,
+    points: race.result?.championshipPoints || 0,
+  }))
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Recent Performance</Typography>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Date</TableCell>
+              <TableCell align="right">Position</TableCell>
+              <TableCell align="right">Points</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {trend.map((result, index) => (
+              <TableRow key={index}>
+                <TableCell>{result.date}</TableCell>
+                <TableCell align="right">{result.position}</TableCell>
+                <TableCell align="right">{result.points}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+})
+
+PerformanceTrendCard.displayName = 'PerformanceTrendCard'
+
+const SeasonProgressCard = memo(({ races }: { races: RaceEntry[] }) => {
+  const today = new Date()
+  const completedRaces = races.filter(race => race.status === 'completed').length
+  const upcomingRaces = races.filter(race => 
+    race.status === 'upcoming' && isFuture(new Date(race.date))
+  ).length
+  const totalRaces = completedRaces + upcomingRaces
+  const progress = (completedRaces / totalRaces) * 100
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Season Progress</Typography>
+        <LinearProgress 
+          variant="determinate" 
+          value={progress} 
+          sx={{ height: 10, borderRadius: 5, mb: 2 }}
+        />
+        <Grid container spacing={2}>
+          <Grid item xs={4}>
+            <Typography variant="body2" color="textSecondary">Completed</Typography>
+            <Typography variant="h6">{completedRaces}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="body2" color="textSecondary">Remaining</Typography>
+            <Typography variant="h6">{upcomingRaces}</Typography>
+          </Grid>
+          <Grid item xs={4}>
+            <Typography variant="body2" color="textSecondary">Progress</Typography>
+            <Typography variant="h6">{progress.toFixed(0)}%</Typography>
+          </Grid>
+        </Grid>
+      </CardContent>
+    </Card>
+  )
+})
+
+SeasonProgressCard.displayName = 'SeasonProgressCard'
+
 const DashboardComponent = () => {
-  const { races, isLoading } = useRaces();
+  const { races, isLoading } = useRaces()
   const [activeTab, setActiveTab] = React.useState(0)
-  const today = startOfDay(new Date());
+  const today = startOfDay(new Date())
   const currentYear = new Date().getFullYear()
   const yearStart = startOfYear(today)
   const yearEnd = endOfYear(today)
+
+  // Get next upcoming race
+  const nextRace = useMemo(() => {
+    return races
+      .filter(race => race.status === 'upcoming' && isFuture(new Date(race.date)))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+  }, [races])
 
   // Career Statistics
   const careerStats = useMemo(() => {
@@ -278,9 +408,8 @@ const DashboardComponent = () => {
       .slice(0, 5)
   }, [races])
 
-  // Class Statistics (Oval vs Road)
+  // Class Statistics
   const classStats = useMemo(() => {
-    const completedRaces = races.filter(race => race.status === 'completed')
     const stats: Record<RaceClass, ClassStats> = {
       oval: {
         totalRaces: 0,
@@ -300,32 +429,45 @@ const DashboardComponent = () => {
         averageFinish: 0,
         bestFinish: Infinity,
       },
+      dirt_road: {
+        totalRaces: 0,
+        wins: 0,
+        podiums: 0,
+        winRate: 0,
+        podiumRate: 0,
+        averageFinish: 0,
+        bestFinish: Infinity,
+      },
+      dirt_oval: {
+        totalRaces: 0,
+        wins: 0,
+        podiums: 0,
+        winRate: 0,
+        podiumRate: 0,
+        averageFinish: 0,
+        bestFinish: Infinity,
+      }
     }
 
+    const completedRaces = races.filter(race => race.status === 'completed')
     completedRaces.forEach(race => {
-      // Default to track type if class is not set
-      const raceClass = race.class || (race.track.type === 'oval' ? 'oval' : 'road') as RaceClass
+      const raceClass = race.class
       const finishPos = race.result?.finishPosition || 0
-      
-      if (stats[raceClass]) {  // Make sure the class exists in our stats object
+
+      if (finishPos > 0) {
         stats[raceClass].totalRaces++
-        if (finishPos === 1) stats[raceClass].wins++
-        if (finishPos <= 3) stats[raceClass].podiums++
-        stats[raceClass].averageFinish = (
-          (stats[raceClass].averageFinish * (stats[raceClass].totalRaces - 1) + finishPos) / 
-          stats[raceClass].totalRaces
-        )
-        stats[raceClass].bestFinish = Math.min(stats[raceClass].bestFinish, finishPos || Infinity)
+        stats[raceClass].wins += finishPos === 1 ? 1 : 0
+        stats[raceClass].podiums += finishPos <= 3 ? 1 : 0
+        stats[raceClass].bestFinish = Math.min(stats[raceClass].bestFinish, finishPos)
+        stats[raceClass].averageFinish = (stats[raceClass].averageFinish * (stats[raceClass].totalRaces - 1) + finishPos) / stats[raceClass].totalRaces
       }
     })
 
     // Calculate rates
-    Object.keys(stats).forEach(key => {
-      const classKey = key as RaceClass
-      const classStat = stats[classKey]
-      if (classStat.totalRaces > 0) {
-        classStat.winRate = (classStat.wins / classStat.totalRaces) * 100
-        classStat.podiumRate = (classStat.podiums / classStat.totalRaces) * 100
+    Object.values(stats).forEach(stat => {
+      if (stat.totalRaces > 0) {
+        stat.winRate = (stat.wins / stat.totalRaces) * 100
+        stat.podiumRate = (stat.podiums / stat.totalRaces) * 100
       }
     })
 
@@ -353,84 +495,93 @@ const DashboardComponent = () => {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Dashboard</Typography>
       
-      <Tabs
-        value={activeTab}
-        onChange={(_, newValue) => setActiveTab(newValue)}
-        sx={{ mb: 3 }}
-      >
-        <Tab label="Overview" />
-        <Tab label="Performance Analytics" />
-      </Tabs>
+      <Grid container spacing={3}>
+        {/* Next Race and Season Progress */}
+        <Grid item xs={12} md={4}>
+          {nextRace && <NextRaceCard race={nextRace} />}
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <SeasonProgressCard races={races} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <PerformanceTrendCard races={races} />
+        </Grid>
 
-      {activeTab === 0 ? (
-        <>
-          {/* Career Overview */}
-          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Career Statistics</Typography>
-          <Card sx={{ mb: 4 }}>
+        {/* Career Stats */}
+        {careerStats && (
+          <Grid item xs={12}>
+            <Card>
+              <CardHeader title="Career Statistics" />
+              <CardContent>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                      title="Total Races"
+                      value={careerStats.totalRaces}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                      title="Wins"
+                      value={careerStats.wins}
+                      subtitle={`${careerStats.winRate.toFixed(1)}%`}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                      title="Podiums"
+                      value={careerStats.podiums}
+                      subtitle={`${careerStats.podiumRate.toFixed(1)}%`}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                      title="Championship Points"
+                      value={careerStats.totalPoints}
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Track Stats */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader title="Top Tracks" />
             <CardContent>
-              <Grid container spacing={2}>
-                <StatCard title="Total Races" value={careerStats.totalRaces} />
-                <StatCard title="Wins" value={careerStats.wins} subtitle={`${careerStats.winRate.toFixed(1)}%`} />
-                <StatCard title="Podiums" value={careerStats.podiums} subtitle={`${careerStats.podiumRate.toFixed(1)}%`} />
-                <StatCard title="Championship Points" value={careerStats.totalPoints} />
-                <StatCard title="Average Finish" value={careerStats.averageFinish.toFixed(1)} />
-                <StatCard title="Average Incidents" value={careerStats.averageIncidents.toFixed(1)} />
-              </Grid>
+              <TrackStatsTable stats={trackStats} />
             </CardContent>
           </Card>
+        </Grid>
 
-          {/* Class Overview */}
-          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Class Performance</Typography>
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            {Object.entries(classStats).map(([className, stats]) => (
-              <ClassPerformanceCard key={className} className={className} stats={stats} />
-            ))}
-          </Grid>
+        {/* Recent Races */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader title="Recent Races" />
+            <CardContent>
+              <RecentRacesTable
+                races={races
+                  .filter(race => race.status === 'completed')
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .slice(0, 5)
+                }
+              />
+            </CardContent>
+          </Card>
+        </Grid>
 
-          {/* Track Statistics */}
-          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Top Tracks</Typography>
-          <Box sx={{ mb: 4 }}>
-            <TrackStatsTable stats={trackStats} />
-          </Box>
-
-          {/* Recent Races */}
-          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Recent Races</Typography>
-          <Box sx={{ mb: 4 }}>
-            <RecentRacesTable races={recentRaces} />
-          </Box>
-
-          {/* Series Statistics */}
-          <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>Series Performance</Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Series</TableCell>
-                  <TableCell align="right">Races</TableCell>
-                  <TableCell align="right">Wins</TableCell>
-                  <TableCell align="right">Podiums</TableCell>
-                  <TableCell align="right">Points</TableCell>
-                  <TableCell align="right">Avg Finish</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {seriesStats.map((series) => (
-                  <TableRow key={series.name}>
-                    <TableCell>{series.name}</TableCell>
-                    <TableCell align="right">{series.totalRaces}</TableCell>
-                    <TableCell align="right">{series.wins}</TableCell>
-                    <TableCell align="right">{series.podiums}</TableCell>
-                    <TableCell align="right">{series.points}</TableCell>
-                    <TableCell align="right">{series.averageFinish.toFixed(1)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>
-      ) : (
-        <PerformanceAnalytics races={races} />
-      )}
+        {/* Performance Analytics */}
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader title="Performance Analytics" />
+            <CardContent>
+              <PerformanceAnalytics races={races} />
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Box>
   )
 }

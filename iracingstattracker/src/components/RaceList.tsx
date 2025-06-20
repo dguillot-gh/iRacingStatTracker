@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import {
   List,
   ListItem,
@@ -7,10 +7,17 @@ import {
   IconButton,
   Typography,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { RaceEntry } from '../types/race';
 import { useRaces } from '../hooks/useRaces';
+import { LoadingSkeleton } from './LoadingSkeleton';
 
 interface RaceItemProps {
   race: RaceEntry;
@@ -28,64 +35,71 @@ const RaceItem = memo(({ race, onEdit }: RaceItemProps) => {
     onEdit(race);
   }, [onEdit, race]);
 
+  const getTrackName = (track: string | { name: string; type: string }) => {
+    if (typeof track === 'string') return track;
+    return track.name;
+  };
+
   return (
-    <ListItem>
-      <ListItemText
-        primary={race.title}
-        secondary={
-          <>
-            <Typography component="span" variant="body2" color="textSecondary">
-              {new Date(race.date).toLocaleDateString()}
-            </Typography>
-            <br />
-            <Typography component="span" variant="body2" color="textSecondary">
-              Track: {race.track}
-            </Typography>
-          </>
-        }
-      />
-      <ListItemSecondaryAction>
-        <IconButton edge="end" aria-label="edit" onClick={handleEdit} size="small">
+    <TableRow>
+      <TableCell>{race.title}</TableCell>
+      <TableCell>{race.series}</TableCell>
+      <TableCell>{new Date(race.date).toLocaleDateString()}</TableCell>
+      <TableCell>{getTrackName(race.track)}</TableCell>
+      <TableCell align="right">
+        <IconButton onClick={handleEdit} size="small">
           <EditIcon />
         </IconButton>
-        <IconButton edge="end" aria-label="delete" onClick={handleDelete} size="small">
+        <IconButton onClick={handleDelete} size="small" color="error">
           <DeleteIcon />
         </IconButton>
-      </ListItemSecondaryAction>
-    </ListItem>
+      </TableCell>
+    </TableRow>
   );
 });
 
 RaceItem.displayName = 'RaceItem';
 
-const RaceList = memo(() => {
-  const { races, isLoading, error } = useRaces();
+interface RaceListProps {
+  races: RaceEntry[];
+  onEditRace: (race: RaceEntry) => void;
+  onDeleteRace: (raceId: string) => void;
+  isLoading?: boolean;
+}
 
-  const handleEdit = useCallback((race: RaceEntry) => {
-    // Handle edit logic here
-    console.log('Editing race:', race);
-  }, []);
+export const RaceList = memo(({ races, onEditRace, onDeleteRace, isLoading = false }: RaceListProps) => {
+  const sortedRaces = useMemo(() => 
+    [...races].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [races]
+  );
 
   if (isLoading) {
-    return <Typography>Loading races...</Typography>;
-  }
-
-  if (error) {
-    return <Typography color="error">{error}</Typography>;
-  }
-
-  if (races.length === 0) {
-    return <Typography>No races found.</Typography>;
+    return <LoadingSkeleton type="table" rows={5} />;
   }
 
   return (
-    <Paper elevation={2} sx={{ mt: 2, mb: 2 }}>
-      <List>
-        {races.map((race) => (
-          <RaceItem key={race.id} race={race} onEdit={handleEdit} />
-        ))}
-      </List>
-    </Paper>
+    <TableContainer component={Paper}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Name</TableCell>
+            <TableCell>Series</TableCell>
+            <TableCell>Date</TableCell>
+            <TableCell>Track</TableCell>
+            <TableCell align="right">Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sortedRaces.map(race => (
+            <RaceItem 
+              key={race.id} 
+              race={race} 
+              onEdit={onEditRace} 
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 });
 

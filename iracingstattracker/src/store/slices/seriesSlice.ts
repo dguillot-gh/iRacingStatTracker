@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Series } from '../types/series';
+import { Series } from '../../types/series';
 
 interface SeriesState {
   series: Series[];

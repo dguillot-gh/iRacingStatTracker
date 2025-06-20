@@ -26,18 +26,16 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  CircularProgress,
 } from '@mui/material'
 import {
   Delete as DeleteIcon,
   Info as InfoIcon,
   Star as StarIcon,
 } from '@mui/icons-material'
-import { RaceEntry, RaceSeries } from '../types/race'
+import { Race, RaceSeries } from '../types/race'
 import { format, isWithinInterval, startOfYear, endOfYear } from 'date-fns'
-
-interface ChampionshipManagerProps {
-  races: RaceEntry[]
-}
+import { useRaces } from '../hooks/useRaces'
 
 interface SeriesChampionship {
   series: RaceSeries
@@ -54,7 +52,8 @@ interface SeriesChampionship {
   iRatingGain: number
 }
 
-export default function ChampionshipManager({ races }: ChampionshipManagerProps) {
+export default function ChampionshipManager() {
+  const { races, isLoading } = useRaces()
   const [selectedSeries, setSelectedSeries] = useState<RaceSeries | 'all'>('all')
   const [showDroppedWeeks, setShowDroppedWeeks] = useState(false)
 
@@ -66,6 +65,8 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
 
   // Championship Statistics
   const championshipStats = useMemo(() => {
+    if (!races) return []
+    
     const stats = new Map<RaceSeries, SeriesChampionship>()
     
     const seasonRaces = races.filter(race =>
@@ -90,14 +91,16 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
 
       if (race.status === 'completed' && race.result) {
         current.completedRaces++
-        current.totalPoints += race.result.championshipPoints
+        current.totalPoints += race.result.championshipPoints || 0
         if (race.result.finishPosition === 1) current.wins++
-        if (race.result.finishPosition <= 3) current.podiums++
+        if (race.result.finishPosition && race.result.finishPosition <= 3) current.podiums++
         current.averageFinish = (
-          (current.averageFinish * (current.completedRaces - 1) + race.result.finishPosition) /
+          (current.averageFinish * (current.completedRaces - 1) + (race.result.finishPosition || 0)) /
           current.completedRaces
         )
-        current.bestFinish = Math.min(current.bestFinish, race.result.finishPosition)
+        if (race.result.finishPosition) {
+          current.bestFinish = Math.min(current.bestFinish, race.result.finishPosition)
+        }
         
         if (race.result.strengthOfField) {
           current.strengthOfField = (
@@ -131,6 +134,8 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
 
   // Weekly Results
   const weeklyResults = useMemo(() => {
+    if (!races) return []
+    
     return races
       .filter(race =>
         (selectedSeries === 'all' || race.series === selectedSeries) &&
@@ -139,6 +144,19 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
       )
       .sort((a, b) => a.week - b.week)
   }, [races, selectedSeries, seasonInterval])
+
+  const getTrackName = (track: string | { name: string; type: string }) => {
+    if (typeof track === 'string') return track;
+    return track.name;
+  };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -164,7 +182,7 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
         {championshipStats
           .filter(stat => selectedSeries === 'all' || stat.series === selectedSeries)
           .map((stat) => (
-            <Grid xs={12} md={selectedSeries === 'all' ? 6 : 12} key={stat.series}>
+            <Grid item xs={12} md={selectedSeries === 'all' ? 6 : 12} key={stat.series}>
               <Card>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
@@ -176,37 +194,37 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
                     />
                   </Stack>
                   <Grid container spacing={2}>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Points</Typography>
                       <Typography variant="h6">{stat.totalPoints}</Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Wins/Podiums</Typography>
                       <Typography variant="h6">{stat.wins}/{stat.podiums}</Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Races</Typography>
                       <Typography variant="h6">
                         {stat.completedRaces}/{stat.requiredRaces}
                       </Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Avg Finish</Typography>
                       <Typography variant="h6">{stat.averageFinish.toFixed(1)}</Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Best Finish</Typography>
                       <Typography variant="h6">
                         {stat.bestFinish === Infinity ? '-' : stat.bestFinish}
                       </Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Avg SoF</Typography>
                       <Typography variant="h6">
                         {stat.strengthOfField ? stat.strengthOfField.toFixed(0) : '-'}
                       </Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">iRating Gain</Typography>
                       <Typography
                         variant="h6"
@@ -215,7 +233,7 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
                         {stat.iRatingGain > 0 ? '+' : ''}{stat.iRatingGain}
                       </Typography>
                     </Grid>
-                    <Grid xs={6} md={3}>
+                    <Grid item xs={6} md={3}>
                       <Typography color="textSecondary" variant="body2">Dropped Weeks</Typography>
                       <Typography variant="h6">{stat.droppedWeeks.length}</Typography>
                     </Grid>
@@ -246,73 +264,57 @@ export default function ChampionshipManager({ races }: ChampionshipManagerProps)
               <TableCell align="right">Finish</TableCell>
               <TableCell align="right">Points</TableCell>
               <TableCell align="right">SoF</TableCell>
-              <TableCell align="right">Split</TableCell>
               <TableCell align="right">iRating</TableCell>
-              <TableCell align="right">Safety Rating</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell align="right">Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {weeklyResults.map((race) => {
-              const isDroppedWeek = race.championshipStanding?.droppedWeeks?.includes(race.week)
-              if (!showDroppedWeeks && isDroppedWeek) return null
-
-              return (
-                <TableRow
-                  key={race.id}
-                  sx={{
-                    opacity: isDroppedWeek ? 0.5 : 1,
-                    bgcolor: isDroppedWeek ? 'action.hover' : 'inherit'
-                  }}
-                >
-                  <TableCell>Week {race.week}</TableCell>
-                  {selectedSeries === 'all' && <TableCell>{race.series}</TableCell>}
-                  <TableCell>{race.track.name}</TableCell>
-                  <TableCell align="right">
-                    {race.result?.finishPosition}
-                    {race.result?.qualifyingResult && (
-                      <Tooltip title={`Qualified: P${race.result.qualifyingResult.position}`}>
-                        <Typography component="span" color="textSecondary" sx={{ ml: 1 }}>
-                          (Q{race.result.qualifyingResult.position})
-                        </Typography>
-                      </Tooltip>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{race.result?.championshipPoints}</TableCell>
-                  <TableCell align="right">{race.result?.strengthOfField?.toFixed(0) || '-'}</TableCell>
-                  <TableCell align="right">
-                    {race.result?.split ? `${race.result.split}/${race.result.totalSplits}` : '-'}
-                  </TableCell>
-                  <TableCell align="right">
-                    {race.result?.iRating && (
-                      <Typography
-                        color={race.result.iRating.change > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {race.result.iRating.change > 0 ? '+' : ''}
-                        {race.result.iRating.change}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    {race.result?.safetyRating && (
-                      <Typography
-                        color={race.result.safetyRating.change > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {race.result.safetyRating.change > 0 ? '+' : ''}
-                        {race.result.safetyRating.change.toFixed(2)}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {isDroppedWeek ? (
-                      <Chip size="small" label="Dropped" color="warning" />
-                    ) : (
-                      <Chip size="small" label="Counted" color="success" />
-                    )}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+            {weeklyResults.map((race) => (
+              <TableRow
+                key={race.id}
+                sx={{
+                  opacity: showDroppedWeeks && race.championshipStanding?.droppedWeeks?.includes(race.week)
+                    ? 0.5
+                    : 1,
+                }}
+              >
+                <TableCell>Week {race.week}</TableCell>
+                {selectedSeries === 'all' && <TableCell>{race.series}</TableCell>}
+                <TableCell>{getTrackName(race.track)}</TableCell>
+                <TableCell align="right">
+                  {race.result?.finishPosition || '-'}
+                </TableCell>
+                <TableCell align="right">
+                  {race.result?.championshipPoints || '-'}
+                </TableCell>
+                <TableCell align="right">
+                  {race.result?.strengthOfField || '-'}
+                </TableCell>
+                <TableCell align="right">
+                  {race.result?.iRating ? (
+                    <Typography
+                      color={race.result.iRating.change > 0 ? 'success.main' : 'error.main'}
+                    >
+                      {race.result.iRating.change > 0 ? '+' : ''}
+                      {race.result.iRating.change}
+                    </Typography>
+                  ) : '-'}
+                </TableCell>
+                <TableCell align="right">
+                  <Chip
+                    size="small"
+                    label={race.status}
+                    color={
+                      race.status === 'completed'
+                        ? 'success'
+                        : race.status === 'scheduled'
+                        ? 'primary'
+                        : 'default'
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </TableContainer>

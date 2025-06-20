@@ -159,8 +159,35 @@ const Settings = memo(() => {
   const [restoreSuccess, setRestoreSuccess] = useState<boolean | null>(null)
 
   const handleSettingChange = useCallback((key: keyof typeof settings, value: any) => {
-    setSettings({ ...settings, [key]: value })
-  }, [settings, setSettings])
+    const newSettings: AppSettings = {
+      ...settings,
+      [key]: value,
+      autoBackup: settings.autoBackup || false,
+      backupFrequency: settings.backupFrequency || 'daily',
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
+
+  const handleBackupChange = useCallback((checked: boolean) => {
+    const newSettings: AppSettings = {
+      ...settings,
+      autoBackup: checked,
+      backupFrequency: settings.backupFrequency || 'daily',
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
+
+  const handleBackupFrequencyChange = useCallback((value: string) => {
+    const newSettings: AppSettings = {
+      ...settings,
+      autoBackup: settings.autoBackup || false,
+      backupFrequency: value,
+      calendarSync: settings.calendarSync || false
+    };
+    setSettings(newSettings);
+  }, [settings, setSettings]);
 
   const handleBackup = useCallback(() => {
     try {
@@ -238,30 +265,63 @@ const Settings = memo(() => {
             <FormControlLabel
               control={
                 <Switch
-                  checked={settings.notifications}
-                  onChange={(e) => handleSettingChange('notifications', e.target.checked)}
+                  checked={settings.notifications.enabled}
+                  onChange={(e) => handleSettingChange('notifications', {
+                    ...settings.notifications,
+                    enabled: e.target.checked
+                  })}
                 />
               }
               label="Enable Notifications"
             />
+            {settings.notifications.enabled && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={settings.notifications.sound}
+                      onChange={(e) => handleSettingChange('notifications', {
+                        ...settings.notifications,
+                        sound: e.target.checked
+                      })}
+                    />
+                  }
+                  label="Sound Notifications"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={settings.notifications.desktop}
+                      onChange={(e) => handleSettingChange('notifications', {
+                        ...settings.notifications,
+                        desktop: e.target.checked
+                      })}
+                    />
+                  }
+                  label="Desktop Notifications"
+                />
+              </>
+            )}
           </FormGroup>
         </Paper>
 
+        {/* Backup Section */}
         <BackupSection onBackup={handleBackup} onRestore={handleRestore} />
 
+        {/* Export Section */}
+        <ExportSection />
+
         {backupSuccess !== null && (
-          <Alert severity={backupSuccess ? 'success' : 'error'}>
-            {backupSuccess ? 'Backup completed successfully!' : 'Backup failed. Please try again.'}
+          <Alert severity={backupSuccess ? "success" : "error"}>
+            {backupSuccess ? "Backup completed successfully" : "Backup failed"}
           </Alert>
         )}
 
         {restoreSuccess !== null && (
-          <Alert severity={restoreSuccess ? 'success' : 'error'}>
-            {restoreSuccess ? 'Restore completed successfully!' : 'Restore failed. Please try again.'}
+          <Alert severity={restoreSuccess ? "success" : "error"}>
+            {restoreSuccess ? "Restore completed successfully" : "Restore failed"}
           </Alert>
         )}
-
-        <ExportSection />
       </Stack>
     </Box>
   )

@@ -1,7 +1,7 @@
 export type TrackType = 'oval' | 'road' | 'dirt'
-export type RaceClass = 'oval' | 'road'
+export type RaceClass = 'oval' | 'road' | 'dirt_road' | 'dirt_oval'
 export type RaceStatus = 'upcoming' | 'completed' | 'cancelled'
-export type RaceSeries = 'Draftmasters' | 'Nascar Trucks' | 'Other'
+export type RaceSeries = string
 
 export interface Track {
   name: string
@@ -30,11 +30,15 @@ export interface RaceResult {
   totalSplits?: number
   strengthOfField?: number
   position?: number
-  finishPosition?: number // Adding this for compatibility
+  finishPosition?: number
+  startPosition?: number
   averageLapTime?: number
   bestLapTime?: number
   leadLaps?: number
   totalLaps?: number
+  lapsCompleted?: number
+  incidentPoints?: number
+  championshipPoints?: number
   iRating?: {
     before: number
     after: number
@@ -55,13 +59,13 @@ export interface ChampionshipStanding {
   droppedWeeks: number[]
 }
 
-export interface RaceEntry {
+export interface Race {
   id: string
-  date: Date
-  endDate?: Date
-  series: string
+  date: string | Date
+  endDate?: string | Date
+  series: RaceSeries
   class: RaceClass
-  track: Track
+  track: string
   vehicle: string
   week: number
   season: string
@@ -71,6 +75,11 @@ export interface RaceEntry {
   championshipStanding?: ChampionshipStanding
   recurrence?: 'none' | 'daily' | 'weekly'
   recurrenceGroupId?: string
+  title?: string
+  startTime?: string
 }
 
-export type RaceFormData = Omit<RaceEntry, 'id' | 'completed' | 'position' | 'iRatingChange'> 
+export type RaceFormData = Omit<Race, 'id'>
+
+// Add type alias for backward compatibility
+export type RaceEntry = Race 

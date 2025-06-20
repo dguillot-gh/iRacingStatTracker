@@ -1,53 +1,101 @@
 import { useCallback } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../store';
-import { RaceEntry } from '../types/race';
-import {
-  setRaces,
-  addRace,
-  updateRace,
-  deleteRace,
-  setLoading,
-  setError,
-} from '../store/raceSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { Race } from '../types/race';
+import { 
+  addRace as addRaceAction,
+  updateRace as updateRaceAction,
+  deleteRace as deleteRaceAction,
+  setRaces as setRacesAction,
+  selectRaces,
+  selectRacesLoading,
+  selectRacesError
+} from '../store/slices/raceSlice';
+import { storage } from '../services/storage';
+
+const serializeRace = (race: Race): Race => ({
+  ...race,
+  date: race.date instanceof Date ? race.date.toISOString() : race.date,
+  endDate: race.endDate instanceof Date ? race.endDate.toISOString() : race.endDate,
+});
 
 export const useRaces = () => {
   const dispatch = useDispatch();
-  const { races, isLoading, error } = useSelector((state: RootState) => state.race);
+  const races = useSelector(selectRaces);
+  const isLoading = useSelector(selectRacesLoading);
+  const error = useSelector(selectRacesError);
 
-  const handleSetRaces = useCallback((races: RaceEntry[]) => {
-    dispatch(setRaces(races));
+  const loadRaces = useCallback(async () => {
+    try {
+      dispatch(setRacesAction({ races: [], loading: true, error: null }));
+      const loadedRaces = await storage.getRaces();
+      dispatch(setRacesAction({ races: loadedRaces, loading: false, error: null }));
+    } catch (err) {
+      dispatch(setRacesAction({ 
+        races: [], 
+        loading: false, 
+        error: err instanceof Error ? err.message : 'Failed to load races' 
+      }));
+    }
   }, [dispatch]);
 
-  const handleAddRace = useCallback((race: RaceEntry) => {
-    dispatch(addRace(race));
+  const addRace = useCallback(async (race: Omit<Race, 'id'>) => {
+    const newRace = serializeRace({ ...race, id: crypto.randomUUID() });
+    
+    // Optimistic update
+    dispatch(addRaceAction(newRace));
+    
+    try {
+      await storage.addRace(newRace);
+    } catch (err) {
+      // Revert on failure
+      dispatch(deleteRaceAction(newRace.id));
+      throw err;
+    }
+    
+    return newRace;
   }, [dispatch]);
 
-  const handleUpdateRace = useCallback((race: RaceEntry) => {
-    dispatch(updateRace(race));
-  }, [dispatch]);
+  const updateRace = useCallback(async (race: Race) => {
+    const oldRace = races.find(r => r.id === race.id);
+    if (!oldRace) throw new Error('Race not found');
 
-  const handleDeleteRace = useCallback((raceId: string) => {
-    dispatch(deleteRace(raceId));
-  }, [dispatch]);
+    const serializedRace = serializeRace(race);
 
-  const handleSetLoading = useCallback((loading: boolean) => {
-    dispatch(setLoading(loading));
-  }, [dispatch]);
+    // Optimistic update
+    dispatch(updateRaceAction(serializedRace));
+    
+    try {
+      await storage.updateRace(serializedRace);
+    } catch (err) {
+      // Revert on failure
+      dispatch(updateRaceAction(oldRace));
+      throw err;
+    }
+  }, [dispatch, races]);
 
-  const handleSetError = useCallback((error: string | null) => {
-    dispatch(setError(error));
-  }, [dispatch]);
+  const deleteRace = useCallback(async (raceId: string) => {
+    const oldRace = races.find(r => r.id === raceId);
+    if (!oldRace) throw new Error('Race not found');
+
+    // Optimistic update
+    dispatch(deleteRaceAction(raceId));
+    
+    try {
+      await storage.deleteRace(raceId);
+    } catch (err) {
+      // Revert on failure
+      dispatch(addRaceAction(oldRace));
+      throw err;
+    }
+  }, [dispatch, races]);
 
   return {
     races,
     isLoading,
     error,
-    setRaces: handleSetRaces,
-    addRace: handleAddRace,
-    updateRace: handleUpdateRace,
-    deleteRace: handleDeleteRace,
-    setLoading: handleSetLoading,
-    setError: handleSetError,
+    loadRaces,
+    addRace,
+    updateRace,
+    deleteRace
   };
 }; 

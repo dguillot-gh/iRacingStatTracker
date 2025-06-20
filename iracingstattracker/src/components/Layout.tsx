@@ -13,7 +13,6 @@ import {
   ListItemText,
   Toolbar,
   Typography,
-  Badge,
   useTheme,
   useMediaQuery,
 } from '@mui/material'
@@ -25,7 +24,7 @@ import {
   PlaylistAdd as PlannerIcon,
   EmojiEvents as SeasonIcon,
 } from '@mui/icons-material'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 const drawerWidth = 240
 
@@ -38,7 +37,6 @@ export default function Layout({ children }: LayoutProps) {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
   const location = useLocation()
-  const navigate = useNavigate()
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)

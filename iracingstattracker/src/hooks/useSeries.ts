@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { v4 as uuidv4 } from 'uuid';
 import { Series } from '../types/series';
@@ -8,14 +8,32 @@ import {
   deleteSeries,
   setLoading,
   setError,
-} from '../store/seriesSlice';
+  setSeries,
+} from '../store/slices/seriesSlice';
 import { RootState } from '../store';
+import { storage } from '../services/storage';
 
 export const useSeries = () => {
   const dispatch = useDispatch();
   const { series, isLoading, error } = useSelector((state: RootState) => state.series);
 
-  const createSeries = useCallback((seriesData: Omit<Series, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // Load series from storage on mount
+  useEffect(() => {
+    const loadSeries = async () => {
+      try {
+        dispatch(setLoading(true));
+        const storedSeries = await storage.getSeries();
+        dispatch(setSeries(storedSeries));
+      } catch (err) {
+        dispatch(setError(err instanceof Error ? err.message : 'Failed to load series'));
+      } finally {
+        dispatch(setLoading(false));
+      }
+    };
+    loadSeries();
+  }, [dispatch]);
+
+  const createSeries = useCallback(async (seriesData: Omit<Series, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
       const newSeries: Series = {
         ...seriesData,
@@ -23,6 +41,11 @@ export const useSeries = () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      
+      // Save to storage first
+      await storage.addSeries(newSeries);
+      
+      // Then update Redux state
       dispatch(addSeries(newSeries));
       return newSeries;
     } catch (err) {
@@ -31,7 +54,7 @@ export const useSeries = () => {
     }
   }, [dispatch]);
 
-  const editSeries = useCallback((seriesData: Partial<Series> & { id: string }) => {
+  const editSeries = useCallback(async (seriesData: Partial<Series> & { id: string }) => {
     try {
       const existingSeries = series.find(s => s.id === seriesData.id);
       if (!existingSeries) {
@@ -43,6 +66,11 @@ export const useSeries = () => {
         ...seriesData,
         updatedAt: new Date().toISOString(),
       };
+
+      // Save to storage first
+      await storage.updateSeries(updatedSeries);
+      
+      // Then update Redux state
       dispatch(updateSeries(updatedSeries));
       return updatedSeries;
     } catch (err) {
@@ -51,8 +79,12 @@ export const useSeries = () => {
     }
   }, [dispatch, series]);
 
-  const removeSeries = useCallback((id: string) => {
+  const removeSeries = useCallback(async (id: string) => {
     try {
+      // Delete from storage first
+      await storage.deleteSeries(id);
+      
+      // Then update Redux state
       dispatch(deleteSeries(id));
       return true;
     } catch (err) {

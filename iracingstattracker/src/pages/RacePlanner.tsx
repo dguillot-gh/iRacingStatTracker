@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -20,16 +20,14 @@ import {
   TextField,
   FormControlLabel,
   Switch,
+  CircularProgress,
+  Alert,
 } from '@mui/material'
-import { Edit as EditIcon, Delete as DeleteIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material'
+import { Edit as EditIcon, Delete as DeleteIcon, CheckCircle as CheckCircleIcon, Add as AddIcon } from '@mui/icons-material'
 import { RaceEntry } from '../types/race'
 import { format } from 'date-fns'
-
-interface RacePlannerProps {
-  races: RaceEntry[]
-  onUpdateRace: (id: string, updates: Partial<RaceEntry>) => void
-  onDeleteRace: (id: string) => void
-}
+import RaceFormDialog from '../components/RaceFormDialog'
+import { useRaces } from '../hooks/useRaces'
 
 interface QuickResultFormData {
   finishPosition: string | number
@@ -40,9 +38,14 @@ interface QuickResultFormData {
   didNotFinish: boolean
 }
 
-export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RacePlannerProps) {
+export default function RacePlanner() {
+  const { races, addRace, updateRace, deleteRace } = useRaces()
   const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
   const [isQuickResultDialogOpen, setIsQuickResultDialogOpen] = useState(false)
+  const [isRaceFormOpen, setIsRaceFormOpen] = useState(false)
+  const [raceToEdit, setRaceToEdit] = useState<RaceEntry | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [quickResultData, setQuickResultData] = useState<QuickResultFormData>({
     finishPosition: '',
     startPosition: '',
@@ -62,47 +65,123 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
       bestLapTime: '',
       didNotFinish: false,
     })
+    setError(null)
     setIsQuickResultDialogOpen(true)
   }
 
-  const handleQuickResultSave = () => {
-    if (!selectedRace) return
+  const handleQuickResultSave = async () => {
+    if (!selectedRace || isSubmitting) return
 
-    const result = quickResultData.didNotFinish
-      ? {
-          finishPosition: 0,
-          startPosition: 0,
-          incidentPoints: 0,
-          championshipPoints: 0,
-          bestLapTime: 0,
-          notes: 'Did Not Finish',
-        }
-      : {
-          finishPosition: Number(quickResultData.finishPosition),
-          startPosition: Number(quickResultData.startPosition),
-          incidentPoints: Number(quickResultData.incidentPoints),
-          championshipPoints: Number(quickResultData.championshipPoints),
-          bestLapTime: Number(quickResultData.bestLapTime),
-        }
+    setIsSubmitting(true)
+    setError(null)
 
-    onUpdateRace(selectedRace.id, {
-      status: 'completed',
-      result,
-    })
+    try {
+      const result = quickResultData.didNotFinish
+        ? {
+            finishPosition: 0,
+            startPosition: 0,
+            incidentPoints: 0,
+            championshipPoints: 0,
+            bestLapTime: 0,
+            notes: 'Did Not Finish',
+          }
+        : {
+            finishPosition: Number(quickResultData.finishPosition),
+            startPosition: Number(quickResultData.startPosition),
+            incidentPoints: Number(quickResultData.incidentPoints),
+            championshipPoints: Number(quickResultData.championshipPoints),
+            bestLapTime: Number(quickResultData.bestLapTime),
+          }
 
-    setIsQuickResultDialogOpen(false)
-    setSelectedRace(null)
+      await updateRace({
+        ...selectedRace,
+        status: 'completed',
+        result,
+      })
+
+      setIsQuickResultDialogOpen(false)
+      setSelectedRace(null)
+    } catch (err) {
+      setError('Failed to save race result. Please try again.')
+      console.error('Failed to save race result:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const upcomingRaces = races
-    .filter(race => race.status === 'upcoming')
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const handleEditRace = (race: RaceEntry) => {
+    setRaceToEdit(race)
+    setError(null)
+    setIsRaceFormOpen(true)
+  }
+
+  const handleCreateRace = () => {
+    setRaceToEdit(null)
+    setError(null)
+    setIsRaceFormOpen(true)
+  }
+
+  const handleRaceFormSubmit = async (race: RaceEntry) => {
+    try {
+      if (raceToEdit) {
+        await updateRace({
+          ...race,
+          id: raceToEdit.id,
+        })
+      } else {
+        await addRace({
+          ...race,
+          status: 'upcoming', // Ensure new races are marked as upcoming
+        })
+      }
+      setIsRaceFormOpen(false)
+      setRaceToEdit(null)
+    } catch (err) {
+      console.error('Failed to save race:', err)
+      throw err // Let RaceFormDialog handle the error
+    }
+  }
+
+  const handleDeleteRace = async (raceId: string) => {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await deleteRace(raceId)
+    } catch (err) {
+      setError('Failed to delete race. Please try again.')
+      console.error('Failed to delete race:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const upcomingRaces = useMemo(() => 
+    races
+      .filter(race => race.status === 'upcoming')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [races]
+  )
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Race Planner
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h4">Race Planner</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleCreateRace}
+          disabled={isSubmitting}
+        >
+          Add Race
+        </Button>
+      </Stack>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       <TableContainer component={Paper}>
         <Table>
@@ -124,11 +203,22 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                 <TableCell>{race.vehicle}</TableCell>
                 <TableCell>
                   <Stack direction="row" spacing={1}>
+                    <Tooltip title="Edit Race">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditRace(race)}
+                        color="primary"
+                        disabled={isSubmitting}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Record Result">
                       <IconButton
                         size="small"
                         onClick={() => handleQuickResultOpen(race)}
                         color="primary"
+                        disabled={isSubmitting}
                       >
                         <CheckCircleIcon />
                       </IconButton>
@@ -136,8 +226,9 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                     <Tooltip title="Delete Race">
                       <IconButton
                         size="small"
-                        onClick={() => onDeleteRace(race.id)}
+                        onClick={() => handleDeleteRace(race.id)}
                         color="error"
+                        disabled={isSubmitting}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -159,7 +250,7 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
 
       <Dialog
         open={isQuickResultDialogOpen}
-        onClose={() => setIsQuickResultDialogOpen(false)}
+        onClose={() => !isSubmitting && setIsQuickResultDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
@@ -174,6 +265,11 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
           )}
         </DialogTitle>
         <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
           <Stack spacing={2} sx={{ mt: 2 }}>
             <FormControlLabel
               control={
@@ -188,6 +284,7 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                     championshipPoints: e.target.checked ? '' : quickResultData.championshipPoints,
                     bestLapTime: e.target.checked ? '' : quickResultData.bestLapTime,
                   })}
+                  disabled={isSubmitting}
                 />
               }
               label="Did Not Finish (DNF)"
@@ -204,7 +301,7 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                   })}
                   fullWidth
                   inputProps={{ min: 1 }}
-                  required
+                  disabled={isSubmitting}
                 />
                 <TextField
                   label="Finish Position"
@@ -216,7 +313,7 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                   })}
                   fullWidth
                   inputProps={{ min: 1 }}
-                  required
+                  disabled={isSubmitting}
                 />
                 <TextField
                   label="Incident Points"
@@ -228,7 +325,7 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                   })}
                   fullWidth
                   inputProps={{ min: 0 }}
-                  required
+                  disabled={isSubmitting}
                 />
                 <TextField
                   label="Championship Points"
@@ -239,7 +336,8 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                     championshipPoints: e.target.value ? Number(e.target.value) : ''
                   })}
                   fullWidth
-                  required
+                  inputProps={{ min: 0 }}
+                  disabled={isSubmitting}
                 />
                 <TextField
                   label="Best Lap Time (seconds)"
@@ -250,32 +348,37 @@ export default function RacePlanner({ races, onUpdateRace, onDeleteRace }: RaceP
                     bestLapTime: e.target.value ? Number(e.target.value) : ''
                   })}
                   fullWidth
-                  inputProps={{ step: 0.001, min: 0.001 }}
-                  required
+                  inputProps={{ min: 0, step: 0.001 }}
+                  disabled={isSubmitting}
                 />
               </>
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsQuickResultDialogOpen(false)}>Cancel</Button>
-          <Button
+          <Button 
+            onClick={() => setIsQuickResultDialogOpen(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button 
             onClick={handleQuickResultSave}
             variant="contained"
-            color="primary"
-            disabled={
-              !quickResultData.didNotFinish &&
-              (!quickResultData.finishPosition ||
-                !quickResultData.startPosition ||
-                !quickResultData.incidentPoints ||
-                !quickResultData.championshipPoints ||
-                !quickResultData.bestLapTime)
-            }
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
           >
-            Save Result
+            {isSubmitting ? 'Saving...' : 'Save Result'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <RaceFormDialog
+        open={isRaceFormOpen}
+        onClose={() => setIsRaceFormOpen(false)}
+        onSubmit={handleRaceFormSubmit}
+        initialData={raceToEdit || undefined}
+      />
     </Box>
   )
 } 

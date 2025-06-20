@@ -1,30 +1,22 @@
-# Build stage
-FROM node:20-alpine as build
+# Development stage
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with legacy peer deps
+RUN npm ci --legacy-peer-deps
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Set development environment
+ENV NODE_ENV=development
 
-# Production stage
-FROM nginx:alpine
+# Expose Vite's default port
+EXPOSE 5173
 
-# Copy built assets from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"] 
+# Start development server
+CMD ["npm", "run", "dev", "--", "--host"] 

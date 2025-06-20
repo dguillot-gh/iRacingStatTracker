@@ -26,13 +26,11 @@ import {
   Step,
   StepLabel,
   StepContent,
+  CircularProgress,
 } from '@mui/material'
-import { RaceEntry, RaceSeries } from '../types/race'
+import { Race, RaceSeries } from '../types/race'
 import { format, isAfter, isBefore, startOfToday } from 'date-fns'
-
-interface ChampionshipAnalysisProps {
-  races: RaceEntry[]
-}
+import { useRaces } from '../hooks/useRaces'
 
 interface Scenario {
   position: number
@@ -50,17 +48,20 @@ interface Prediction {
   probability: number
 }
 
-export default function ChampionshipAnalysis({ races }: ChampionshipAnalysisProps) {
+export default function ChampionshipAnalysis() {
+  const { races, isLoading } = useRaces()
   const [selectedSeries, setSelectedSeries] = useState<RaceSeries | 'all'>('all')
   const [scenarioPosition, setScenarioPosition] = useState<number>(1)
 
   // Calculate predictions based on historical performance
   const predictions = useMemo(() => {
+    if (!races) return []
+    
     const today = startOfToday()
     const predictions: Prediction[] = []
     
     // Group races by series
-    const seriesRaces = new Map<RaceSeries, RaceEntry[]>()
+    const seriesRaces = new Map<RaceSeries, Race[]>()
     races.forEach(race => {
       const seriesRaces_ = seriesRaces.get(race.series) || []
       seriesRaces_.push(race)
@@ -138,6 +139,19 @@ export default function ChampionshipAnalysis({ races }: ChampionshipAnalysisProp
       newPosition: Math.max(1, prediction.predictedPosition - (5 - scenarioPosition))
     }
   }, [selectedSeries, scenarioPosition, predictions])
+
+  const getTrackName = (track: string | { name: string; type: string }) => {
+    if (typeof track === 'string') return track;
+    return track.name;
+  };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -230,7 +244,7 @@ export default function ChampionshipAnalysis({ races }: ChampionshipAnalysisProp
       </Grid>
 
       {/* Championship Timeline */}
-      {selectedSeries !== 'all' && (
+      {selectedSeries !== 'all' && races && (
         <Paper sx={{ p: 3, mt: 3 }}>
           <Typography variant="h6" gutterBottom>Championship Progress</Typography>
           <Stepper orientation="vertical">
@@ -240,30 +254,16 @@ export default function ChampionshipAnalysis({ races }: ChampionshipAnalysisProp
               .map((race, index) => (
                 <Step key={race.id} active={race.status === 'completed'}>
                   <StepLabel>
-                    <Typography variant="subtitle2">
-                      {format(new Date(race.date), 'MMM d, yyyy')} - {race.track.name}
+                    <Typography variant="subtitle1">
+                      {format(new Date(race.date), 'MMM d, yyyy')} - {getTrackName(race.track)}
                     </Typography>
                   </StepLabel>
                   <StepContent>
                     {race.status === 'completed' && race.result && (
-                      <>
-                        <Typography variant="body2">
-                          Finish Position: P{race.result.finishPosition}
-                        </Typography>
-                        <Typography variant="body2">
-                          Points: {race.result.championshipPoints}
-                        </Typography>
-                        {race.championshipStanding && (
-                          <Typography variant="body2" color="primary">
-                            Championship Position: P{race.championshipStanding.position}
-                          </Typography>
-                        )}
-                      </>
-                    )}
-                    {race.status === 'upcoming' && (
-                      <Typography variant="body2" color="textSecondary">
-                        Upcoming Race
-                      </Typography>
+                      <Box>
+                        <Typography>Finish Position: P{race.result.finishPosition}</Typography>
+                        <Typography>Points: {race.result.championshipPoints}</Typography>
+                      </Box>
                     )}
                   </StepContent>
                 </Step>
