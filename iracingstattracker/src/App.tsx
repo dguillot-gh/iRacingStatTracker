@@ -167,7 +167,22 @@ export default function App() {
     setSettingsOpen(false)
   }
 
-  const handleRaceUpdate = (updatedRaces: RaceEntry[]) => {
+  const handleCreateRace = (newRace: RaceEntry) => {
+    const updatedRaces = [...races, newRace]
+    setRaces(updatedRaces)
+    StorageService.saveRaces(updatedRaces)
+  }
+
+  const handleUpdateRace = (id: string, updates: Partial<RaceEntry>) => {
+    const updatedRaces = races.map(race => 
+      race.id === id ? { ...race, ...updates } : race
+    )
+    setRaces(updatedRaces)
+    StorageService.saveRaces(updatedRaces)
+  }
+
+  const handleDeleteRace = (id: string) => {
+    const updatedRaces = races.filter(race => race.id !== id)
     setRaces(updatedRaces)
     StorageService.saveRaces(updatedRaces)
   }
@@ -300,55 +315,64 @@ export default function App() {
             }}
           >
             <Toolbar />
-            <Routes>
-              <Route path="/" element={<Dashboard races={races} />} />
-              <Route
-                path="/planner"
-                element={
-                  <RacePlanner
-                    races={races}
-                    onUpdateRace={(id, updates) => {
-                      const updatedRaces = races.map(race =>
-                        race.id === id ? { ...race, ...updates } : race
-                      )
-                      handleRaceUpdate(updatedRaces)
-                    }}
-                    onDeleteRace={(id) => {
-                      const updatedRaces = races.filter(race => race.id !== id)
-                      handleRaceUpdate(updatedRaces)
-                    }}
-                  />
-                }
-              />
-              <Route
-                path="/history"
-                element={<RaceHistory races={races} onRaceUpdate={handleRaceUpdate} />}
-              />
-              <Route
-                path="/championship"
-                element={<ChampionshipManager races={races} />}
-              />
-              <Route
-                path="/analysis"
-                element={<ChampionshipAnalysis races={races} />}
-              />
-              <Route
-                path="/calendar"
-                element={<Calendar races={races} onRaceUpdate={handleRaceUpdate} />}
-              />
-              <Route
-                path="/settings"
-                element={
-                  <Settings
-                    settings={settings}
-                    onSettingsUpdate={handleSettingsUpdate}
-                    races={races}
-                  />
-                }
-              />
-              <Route path="/series" element={<SeriesEditor />} />
-              <Route path="/docs" element={<Documentation />} />
-            </Routes>
+            <Container maxWidth="xl">
+              <Routes>
+                <Route path="/" element={<Dashboard races={races} />} />
+                <Route
+                  path="/planner"
+                  element={
+                    <RacePlanner
+                      races={races}
+                      onCreateRace={handleCreateRace}
+                      onUpdateRace={handleUpdateRace}
+                      onDeleteRace={handleDeleteRace}
+                    />
+                  }
+                />
+                <Route
+                  path="/history"
+                  element={
+                    <RaceHistory
+                      races={races}
+                      onCreateRace={handleCreateRace}
+                      onUpdateRace={handleUpdateRace}
+                      onDeleteRace={handleDeleteRace}
+                    />
+                  }
+                />
+                <Route
+                  path="/championship"
+                  element={<ChampionshipManager races={races} />}
+                />
+                <Route
+                  path="/analysis"
+                  element={<ChampionshipAnalysis races={races} />}
+                />
+                <Route
+                  path="/calendar"
+                  element={
+                    <Calendar
+                      races={races}
+                      onCreateRace={handleCreateRace}
+                      onUpdateRace={handleUpdateRace}
+                      onDeleteRace={handleDeleteRace}
+                    />
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <Settings
+                      settings={settings}
+                      onSettingsUpdate={handleSettingsUpdate}
+                      races={races}
+                    />
+                  }
+                />
+                <Route path="/series" element={<SeriesEditor />} />
+                <Route path="/docs" element={<Documentation />} />
+              </Routes>
+            </Container>
           </Box>
 
           <SettingsDialog

@@ -8,7 +8,7 @@ import {
   deleteSeries,
   setLoading,
   setError,
-} from '../store/seriesSlice';
+} from '../store/slices/seriesSlice';
 import { RootState } from '../store';
 
 export const useSeries = () => {

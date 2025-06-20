@@ -25,15 +25,17 @@ import {
   Alert,
   FormHelperText,
 } from '@mui/material'
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material'
 import { RaceEntry } from '../types/race'
 import { format } from 'date-fns'
 import { useRaces } from '../hooks/useRaces'
+import RaceFormDialog from '../components/RaceFormDialog'
 
 interface RaceHistoryProps {
   races: RaceEntry[]
   onUpdateRace: (id: string, updates: Partial<RaceEntry>) => void
   onDeleteRace: (id: string) => void
+  onCreateRace: (race: RaceEntry) => void
 }
 
 interface RaceResultFormData {
@@ -266,56 +268,95 @@ const EditDialog = memo(({
 
 EditDialog.displayName = 'EditDialog';
 
-const RaceHistory = memo(() => {
-  const { races, updateRace, deleteRace } = useRaces();
-  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+export default function RaceHistory() {
+  const { races, addRace, updateRace, deleteRace } = useRaces()
+  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isRaceFormOpen, setIsRaceFormOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const completedRaces = useMemo(() => 
     races
       .filter(race => race.status === 'completed')
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [races]
-  );
+  )
 
-  const handleEditClick = useCallback((race: RaceEntry) => {
-    setSelectedRace(race);
-    setIsEditDialogOpen(true);
-  }, []);
+  const handleEditRace = useCallback((race: RaceEntry) => {
+    setSelectedRace(race)
+    setIsEditDialogOpen(true)
+  }, [])
 
-  const handleDeleteClick = useCallback((id: string) => {
-    deleteRace(id);
-  }, [deleteRace]);
+  const handleCreateRace = useCallback(() => {
+    setSelectedRace(null)
+    setIsRaceFormOpen(true)
+  }, [])
 
-  const handleDialogClose = useCallback(() => {
-    setIsEditDialogOpen(false);
-    setSelectedRace(null);
-  }, []);
+  const handleRaceFormSubmit = useCallback(async (race: RaceEntry) => {
+    try {
+      if (selectedRace) {
+        await updateRace(race)
+      } else {
+        await addRace(race)
+      }
+      setIsRaceFormOpen(false)
+      setSelectedRace(null)
+    } catch (error) {
+      console.error('Failed to save race:', error)
+      setError('Failed to save race. Please try again.')
+    }
+  }, [selectedRace, updateRace, addRace])
 
-  const handleSave = useCallback((formData: RaceResultFormData) => {
-    if (!selectedRace) return;
+  const handleDeleteRace = useCallback(async (id: string) => {
+    try {
+      await deleteRace(id)
+    } catch (error) {
+      console.error('Failed to delete race:', error)
+      setError('Failed to delete race. Please try again.')
+    }
+  }, [deleteRace])
 
-    updateRace({
-      ...selectedRace,
-      status: 'completed',
-      result: {
-        finishPosition: formData.finishPosition as number,
-        startPosition: formData.startPosition as number,
-        incidentPoints: formData.incidentPoints as number,
-        championshipPoints: formData.championshipPoints as number,
-        bestLapTime: formData.bestLapTime as number,
-      },
-    });
+  const handleSaveResult = useCallback(async (formData: RaceResultFormData) => {
+    if (!selectedRace) return
 
-    setIsEditDialogOpen(false);
-    setSelectedRace(null);
-  }, [selectedRace, updateRace]);
+    try {
+      await updateRace({
+        ...selectedRace,
+        result: {
+          finishPosition: Number(formData.finishPosition),
+          startPosition: Number(formData.startPosition),
+          incidentPoints: Number(formData.incidentPoints),
+          championshipPoints: Number(formData.championshipPoints),
+          bestLapTime: Number(formData.bestLapTime),
+        },
+      })
+      setIsEditDialogOpen(false)
+      setSelectedRace(null)
+    } catch (error) {
+      console.error('Failed to save race result:', error)
+      setError('Failed to save race result. Please try again.')
+    }
+  }, [selectedRace, updateRace])
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Race History
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h4">Race History</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleCreateRace}
+        >
+          Add Race
+        </Button>
+      </Stack>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       <TableContainer component={Paper}>
         <Table>
@@ -327,7 +368,7 @@ const RaceHistory = memo(() => {
               <TableCell>Vehicle</TableCell>
               <TableCell align="right">Start</TableCell>
               <TableCell align="right">Finish</TableCell>
-              <TableCell align="right">Inc</TableCell>
+              <TableCell align="right">Incidents</TableCell>
               <TableCell align="right">Points</TableCell>
               <TableCell align="right">Best Lap</TableCell>
               <TableCell>Actions</TableCell>
@@ -338,8 +379,8 @@ const RaceHistory = memo(() => {
               <RaceTableRow
                 key={race.id}
                 race={race}
-                onEditClick={handleEditClick}
-                onDeleteClick={handleDeleteClick}
+                onEditClick={handleEditRace}
+                onDeleteClick={handleDeleteRace}
               />
             ))}
             {completedRaces.length === 0 && (
@@ -356,13 +397,16 @@ const RaceHistory = memo(() => {
       <EditDialog
         isOpen={isEditDialogOpen}
         selectedRace={selectedRace}
-        onClose={handleDialogClose}
-        onSave={handleSave}
+        onClose={() => setIsEditDialogOpen(false)}
+        onSave={handleSaveResult}
+      />
+
+      <RaceFormDialog
+        open={isRaceFormOpen}
+        onClose={() => setIsRaceFormOpen(false)}
+        onSubmit={handleRaceFormSubmit}
+        initialData={selectedRace || undefined}
       />
     </Box>
-  );
-});
-
-RaceHistory.displayName = 'RaceHistory';
-
-export default RaceHistory; 
+  )
+} 

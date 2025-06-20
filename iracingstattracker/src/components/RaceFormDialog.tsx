@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -16,19 +16,53 @@ import {
   Stack,
   Typography,
   Divider,
+  FormHelperText,
+  CircularProgress,
+  Box,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
 import { RaceEntry } from '../types/race'
 import { Series } from '../types/series'
-import { addDays } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { useSeries } from '../hooks/useSeries'
+import { generateUUID } from '../utils/uuid'
 
 interface RaceFormDialogProps {
   open: boolean
   onClose: () => void
-  onSubmit: (race: RaceEntry) => void
+  onSubmit: (race: RaceEntry) => Promise<void>
   initialData?: RaceEntry
 }
+
+const defaultFormData: RaceEntry = {
+  id: generateUUID(),
+  series: '',
+  vehicle: '',
+  week: 1,
+  season: new Date().getFullYear().toString(),
+  date: new Date(),
+  track: {
+    name: '',
+    type: 'oval',
+  },
+  status: 'upcoming',
+  class: 'oval',
+}
+
+const DialogTitleContent = memo(({ race }: { race?: RaceEntry }) => (
+  <Box>
+    <Typography variant="h6" component="div">
+      {race ? 'Edit Race' : 'Add Race'}
+    </Typography>
+    {race && (
+      <Typography variant="body2" color="textSecondary">
+        {format(new Date(race.date), 'MMM d, yyyy')} - {race.series} - {race.track.name}
+      </Typography>
+    )}
+  </Box>
+))
+
+DialogTitleContent.displayName = 'DialogTitleContent'
 
 export default function RaceFormDialog({
   open,
@@ -36,34 +70,33 @@ export default function RaceFormDialog({
   onSubmit,
   initialData,
 }: RaceFormDialogProps) {
-  const { series } = useSeries();
-  const [formData, setFormData] = useState<RaceEntry>({
-    id: crypto.randomUUID(),
-    series: '',
-    vehicle: '',
-    week: 1,
-    season: new Date().getFullYear().toString(),
-    date: new Date(),
-    track: {
-      name: '',
-      type: 'oval',
-    },
-    status: 'upcoming',
-    class: 'oval',
-  })
-  const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
+  const { series } = useSeries()
+  const [formData, setFormData] = useState<RaceEntry>(defaultFormData)
+  const [selectedSeries, setSelectedSeries] = useState<Series | null>(null)
   const [isMultiDay, setIsMultiDay] = useState(false)
   const [isWeeklyRecurrence, setIsWeeklyRecurrence] = useState(false)
+  const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Reset form when dialog opens/closes
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData)
-      setIsMultiDay(!!initialData.endDate)
-      setIsWeeklyRecurrence(false) // Reset recurrence when editing
-      const foundSeries = series.find(s => s.name === initialData.series);
-      setSelectedSeries(foundSeries || null);
+    if (open) {
+      if (initialData) {
+        setFormData(initialData)
+        setIsMultiDay(!!initialData.endDate)
+        setIsWeeklyRecurrence(false)
+        const foundSeries = series.find(s => s.name === initialData.series)
+        setSelectedSeries(foundSeries || null)
+      } else {
+        setFormData({ ...defaultFormData, id: generateUUID() })
+        setSelectedSeries(null)
+        setIsMultiDay(false)
+        setIsWeeklyRecurrence(false)
+      }
+      setErrors({})
+      setIsSubmitting(false)
     }
-  }, [initialData, series])
+  }, [open, initialData, series])
 
   useEffect(() => {
     if (selectedSeries) {
@@ -77,73 +110,119 @@ export default function RaceFormDialog({
           ...prev.track,
           type: selectedSeries.defaultTrackType,
         },
-      }));
+      }))
     }
-  }, [selectedSeries]);
+  }, [selectedSeries])
 
-  const handleSubmit = () => {
-    if (!formData.series || !formData.track.name) return
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {}
 
-    if (isWeeklyRecurrence) {
-      // Create 7 races, one for each day of the week
-      const races: RaceEntry[] = []
-      for (let i = 0; i < 7; i++) {
-        races.push({
+    if (!formData.series) {
+      newErrors.series = 'Series is required'
+    }
+    if (!formData.vehicle) {
+      newErrors.vehicle = 'Vehicle is required'
+    }
+    if (!formData.track.name) {
+      newErrors.track = 'Track name is required'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async () => {
+    if (!validateForm() || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      if (isWeeklyRecurrence) {
+        // Create 7 races, one for each day of the week
+        const races: RaceEntry[] = []
+        const groupId = generateUUID()
+        for (let i = 0; i < 7; i++) {
+          races.push({
+            ...formData,
+            id: generateUUID(),
+            date: addDays(formData.date, i),
+            recurrence: 'daily',
+            recurrenceGroupId: groupId,
+          })
+        }
+        // Submit each race
+        await Promise.all(races.map(race => onSubmit(race)))
+      } else {
+        // Submit single race
+        await onSubmit({
           ...formData,
-          id: crypto.randomUUID(),
-          date: addDays(formData.date, i),
-          recurrence: 'daily',
-          recurrenceGroupId: crypto.randomUUID(), // Same group ID for all races in the week
+          endDate: isMultiDay ? formData.endDate : undefined,
         })
       }
-      // Submit each race
-      races.forEach(race => onSubmit(race))
-    } else {
-      // Submit single race
-      onSubmit(formData)
+      onClose()
+    } catch (error) {
+      console.error('Failed to submit race:', error)
+      setErrors(prev => ({
+        ...prev,
+        submit: 'Failed to save race. Please try again.',
+      }))
+    } finally {
+      setIsSubmitting(false)
     }
-    
-    onClose()
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      maxWidth="sm" 
+      fullWidth
+      PaperProps={{
+        sx: { maxHeight: '90vh' }
+      }}
+    >
       <DialogTitle>
-        {initialData ? 'Edit Race' : 'Add Race'}
+        <DialogTitleContent race={initialData} />
       </DialogTitle>
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
+            <FormControl fullWidth error={!!errors.series}>
               <InputLabel>Series</InputLabel>
               <Select
                 value={selectedSeries?.id || ''}
                 label="Series"
                 onChange={(e) => {
-                  const selected = series.find(s => s.id === e.target.value);
-                  setSelectedSeries(selected || null);
+                  const selected = series.find(s => s.id === e.target.value)
+                  setSelectedSeries(selected || null)
                 }}
+                disabled={isSubmitting}
               >
                 {series.map((s) => (
                   <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
                 ))}
               </Select>
+              {errors.series && (
+                <FormHelperText>{errors.series}</FormHelperText>
+              )}
             </FormControl>
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
+            <FormControl fullWidth error={!!errors.vehicle}>
               <InputLabel>Vehicle</InputLabel>
               <Select
                 value={formData.vehicle}
                 label="Vehicle"
                 onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
-                disabled={!selectedSeries}
+                disabled={!selectedSeries || isSubmitting}
               >
                 {selectedSeries?.cars.map((car) => (
                   <MenuItem key={car} value={car}>{car}</MenuItem>
                 ))}
               </Select>
+              {errors.vehicle && (
+                <FormHelperText>{errors.vehicle}</FormHelperText>
+              )}
             </FormControl>
           </Grid>
 
@@ -178,6 +257,8 @@ export default function RaceFormDialog({
                   track: { ...formData.track, name: e.target.value },
                 })
               }
+              error={!!errors.track}
+              helperText={errors.track}
             />
           </Grid>
 
@@ -279,12 +360,27 @@ export default function RaceFormDialog({
               </Select>
             </FormControl>
           </Grid>
+
+          {errors.submit && (
+            <Grid item xs={12}>
+              <Typography color="error" variant="body2">
+                {errors.submit}
+              </Typography>
+            </Grid>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained" color="primary">
-          {initialData ? 'Update' : 'Add'} Race
+        <Button onClick={onClose} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained" 
+          disabled={isSubmitting}
+          startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+        >
+          {isSubmitting ? 'Saving...' : 'Save'}
         </Button>
       </DialogActions>
     </Dialog>

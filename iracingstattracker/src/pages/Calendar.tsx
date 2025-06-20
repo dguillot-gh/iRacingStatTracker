@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -11,6 +11,7 @@ import {
   Stack,
   Chip,
   Button,
+  Alert,
 } from '@mui/material'
 import {
   Today as TodayIcon,
@@ -37,6 +38,8 @@ import { enUS } from 'date-fns/locale'
 import { RaceEntry } from '../types/race'
 import RaceFormDialog from '../components/RaceFormDialog'
 import '../styles/calendar.css'
+import { generateUUID } from '../utils/uuid'
+import { useRaces } from '../hooks/useRaces'
 
 const locales = {
   'en-US': enUS,
@@ -50,50 +53,71 @@ const localizer = dateFnsLocalizer({
   locales,
 })
 
-interface CalendarProps {
-  races: RaceEntry[]
-  onRaceUpdate: (races: RaceEntry[]) => void
-}
-
-export default function Calendar({ races, onRaceUpdate }: CalendarProps) {
+export default function Calendar() {
+  const { races, addRace, updateRace, deleteRace } = useRaces()
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [formOpen, setFormOpen] = useState(false)
-  const [selectedRace, setSelectedRace] = useState<RaceEntry | null>(null)
+  const [isRaceFormOpen, setIsRaceFormOpen] = useState(false)
+  const [raceToEdit, setRaceToEdit] = useState<RaceEntry | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleCreateRace = () => {
+    setRaceToEdit(null)
     setSelectedDate(new Date())
-    setSelectedRace(null)
-    setFormOpen(true)
+    setError(null)
+    setIsRaceFormOpen(true)
   }
 
   const handleDateSelect = ({ start }: { start: Date }) => {
     setSelectedDate(start)
-    setSelectedRace(null)
-    setFormOpen(true)
+    setRaceToEdit(null)
+    setError(null)
+    setIsRaceFormOpen(true)
   }
 
   const handleEventSelect = (event: RaceEntry) => {
-    setSelectedRace(event)
-    setFormOpen(true)
+    setRaceToEdit(event)
+    setError(null)
+    setIsRaceFormOpen(true)
   }
 
   const handleFormClose = () => {
-    setFormOpen(false)
+    setIsRaceFormOpen(false)
     setSelectedDate(null)
-    setSelectedRace(null)
+    setRaceToEdit(null)
   }
 
-  const handleRaceSubmit = (race: RaceEntry) => {
-    if (selectedRace) {
-      // Update existing race
-      onRaceUpdate(
-        races.map((r) => (r.id === selectedRace.id ? race : r))
-      )
-    } else {
-      // Add new race
-      onRaceUpdate([...races, race])
+  const handleRaceFormSubmit = async (race: RaceEntry) => {
+    try {
+      if (raceToEdit) {
+        await updateRace({
+          ...race,
+          id: raceToEdit.id,
+        })
+      } else {
+        await addRace({
+          ...race,
+          status: 'upcoming', // Ensure new races are marked as upcoming
+        })
+      }
+      handleFormClose()
+    } catch (err) {
+      console.error('Failed to save race:', err)
+      throw err // Let RaceFormDialog handle the error
     }
-    handleFormClose()
+  }
+
+  const handleDeleteRace = async (raceId: string) => {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await deleteRace(raceId)
+    } catch (err) {
+      setError('Failed to delete race. Please try again.')
+      console.error('Failed to delete race:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const eventStyleGetter = (event: RaceEntry) => {
@@ -168,10 +192,17 @@ export default function Calendar({ races, onRaceUpdate }: CalendarProps) {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={handleCreateRace}
+          disabled={isSubmitting}
         >
           Create Race
         </Button>
       </Stack>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       {/* Monthly Stats */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -248,19 +279,22 @@ export default function Calendar({ races, onRaceUpdate }: CalendarProps) {
 
       {/* Race Form Dialog */}
       <RaceFormDialog
-        open={formOpen}
+        open={isRaceFormOpen}
         onClose={handleFormClose}
-        onSubmit={handleRaceSubmit}
-        initialData={selectedRace || (selectedDate ? {
-          id: crypto.randomUUID(),
-          date: selectedDate,
+        onSubmit={handleRaceFormSubmit}
+        initialData={raceToEdit || (selectedDate ? {
+          id: generateUUID(),
           series: '',
-          class: 'oval',
-          track: { name: '', type: 'oval' },
           vehicle: '',
           week: 1,
           season: new Date().getFullYear().toString(),
+          date: selectedDate,
+          track: {
+            name: '',
+            type: 'oval',
+          },
           status: 'upcoming',
+          class: 'oval',
         } : undefined)}
       />
     </Box>
