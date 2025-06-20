@@ -26,6 +26,7 @@ import { Series } from '../types/series'
 import { addDays, format } from 'date-fns'
 import { useSeries } from '../hooks/useSeries'
 import { generateUUID } from '../utils/uuid'
+import { validateRaceEntry } from '../utils/validation'
 
 interface RaceFormDialogProps {
   open: boolean
@@ -115,20 +116,9 @@ export default function RaceFormDialog({
   }, [selectedSeries])
 
   const validateForm = (): boolean => {
-    const newErrors: { [key: string]: string } = {}
-
-    if (!formData.series) {
-      newErrors.series = 'Series is required'
-    }
-    if (!formData.vehicle) {
-      newErrors.vehicle = 'Vehicle is required'
-    }
-    if (!formData.track.name) {
-      newErrors.track = 'Track name is required'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const validation = validateRaceEntry(formData)
+    setErrors(validation.errors)
+    return validation.isValid
   }
 
   const handleSubmit = async () => {
@@ -149,8 +139,10 @@ export default function RaceFormDialog({
             recurrenceGroupId: groupId,
           })
         }
-        // Submit each race
-        await Promise.all(races.map(race => onSubmit(race)))
+        // Submit each race sequentially to ensure proper storage persistence
+        for (const race of races) {
+          await onSubmit(race)
+        }
       } else {
         // Submit single race
         await onSubmit({

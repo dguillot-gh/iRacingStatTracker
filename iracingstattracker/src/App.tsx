@@ -39,12 +39,16 @@ import RaceHistory from './pages/RaceHistory'
 import ChampionshipManager from './pages/ChampionshipManager'
 import ChampionshipAnalysis from './pages/ChampionshipAnalysis'
 import SettingsDialog from './components/SettingsDialog'
-import { RaceEntry } from './types/race'
-import { StorageService, AppSettings } from './services/storage'
+import { Race } from './types/race'
+import { storage, AppSettings } from './services/storage'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 import SeriesEditor from './pages/SeriesEditor'
 import Documentation from './pages/Documentation'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { useRaces } from './hooks/useRaces'
+import { useSelector, useDispatch } from 'react-redux'
+import { selectSettings, setSettings as setSettingsAction } from './store/slices/settingsSlice'
 
 // Create theme with color palette
 const createAppTheme = (mode: 'light' | 'dark') =>
@@ -77,77 +81,42 @@ const createAppTheme = (mode: 'light' | 'dark') =>
 const DRAWER_WIDTH = 240
 
 export default function App() {
-  const [races, setRaces] = useState<RaceEntry[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark')
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settings, setSettings] = useState<AppSettings>({
-    theme: 'dark',
-    autoRefreshInterval: 60000,
-    defaultView: 'dashboard',
-    notifications: {
-      enabled: false,
-      sound: false,
-      desktop: false
-    },
-    autoBackup: false,
-    backupFrequency: 'daily',
-    calendarSync: false
-  })
   
-  const theme = createAppTheme(themeMode)
+  const dispatch = useDispatch()
+  const settings = useSelector(selectSettings)
+  const { races, isLoading, loadRaces } = useRaces()
+  
+  const theme = createAppTheme(settings.theme)
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const location = useLocation()
 
-  // Load races and settings from localStorage on initial render
+  // Load data on initial render
   useEffect(() => {
     const loadData = async () => {
       try {
-        setIsLoading(true)
-        const [loadedRaces, loadedSettings] = await Promise.all([
-          StorageService.getRaces(),
-          StorageService.getSettings(),
-        ])
-        setRaces(loadedRaces)
-        setSettings(loadedSettings)
-        setThemeMode(loadedSettings.theme)
+        const loadedSettings = await storage.getSettings()
+        dispatch(setSettingsAction(loadedSettings))
+        await loadRaces()
       } catch (error) {
         console.error('Failed to load data:', error)
-      } finally {
-        setIsLoading(false)
       }
     }
     loadData()
-  }, [])
-
-  // Save races whenever they change
-  useEffect(() => {
-    if (!isLoading) {
-      StorageService.saveRaces(races).catch(error => {
-        console.error('Failed to save races:', error)
-      })
-    }
-  }, [races, isLoading])
-
-  // Save settings whenever they change
-  useEffect(() => {
-    if (!isLoading) {
-      StorageService.saveSettings(settings).catch(error => {
-        console.error('Failed to save settings:', error)
-      })
-    }
-  }, [settings, isLoading])
+  }, [dispatch, loadRaces])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
   }
 
   const handleThemeToggle = () => {
-    const newMode = themeMode === 'dark' ? 'light' : 'dark'
-    setThemeMode(newMode)
-    setSettings(prev => ({ ...prev, theme: newMode }))
+    const newSettings = {
+      ...settings,
+      theme: settings.theme === 'dark' ? 'light' : 'dark'
+    }
+    dispatch(setSettingsAction(newSettings))
   }
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -167,30 +136,8 @@ export default function App() {
     setSettingsOpen(false)
   }
 
-  const handleCreateRace = (newRace: RaceEntry) => {
-    const updatedRaces = [...races, newRace]
-    setRaces(updatedRaces)
-    StorageService.saveRaces(updatedRaces)
-  }
-
-  const handleUpdateRace = (id: string, updates: Partial<RaceEntry>) => {
-    const updatedRaces = races.map(race => 
-      race.id === id ? { ...race, ...updates } : race
-    )
-    setRaces(updatedRaces)
-    StorageService.saveRaces(updatedRaces)
-  }
-
-  const handleDeleteRace = (id: string) => {
-    const updatedRaces = races.filter(race => race.id !== id)
-    setRaces(updatedRaces)
-    StorageService.saveRaces(updatedRaces)
-  }
-
   const handleSettingsUpdate = (newSettings: AppSettings) => {
-    setSettings(newSettings)
-    setThemeMode(newSettings.theme)
-    StorageService.saveSettings(newSettings)
+    dispatch(setSettingsAction(newSettings))
   }
 
   const navigationItems = [
@@ -253,20 +200,11 @@ export default function App() {
                 iRacing Stat Tracker
               </Typography>
               <IconButton color="inherit" onClick={handleThemeToggle}>
-                {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                {settings.theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
               <IconButton color="inherit" onClick={handleMenuOpen}>
                 <SettingsIcon />
               </IconButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-              >
-                <MenuItem onClick={handleSettingsOpen}>Settings</MenuItem>
-                <MenuItem onClick={handleMenuClose}>Profile</MenuItem>
-                <MenuItem onClick={handleMenuClose}>Backup Data</MenuItem>
-              </Menu>
             </Toolbar>
           </AppBar>
 
@@ -279,7 +217,7 @@ export default function App() {
               open={mobileOpen}
               onClose={handleDrawerToggle}
               ModalProps={{
-                keepMounted: true,
+                keepMounted: true, // Better open performance on mobile.
               }}
               sx={{
                 display: { xs: 'block', md: 'none' },
@@ -315,73 +253,36 @@ export default function App() {
             }}
           >
             <Toolbar />
-            <Container maxWidth="xl">
+            <ErrorBoundary>
               <Routes>
-                <Route path="/" element={<Dashboard races={races} />} />
-                <Route
-                  path="/planner"
-                  element={
-                    <RacePlanner
-                      races={races}
-                      onCreateRace={handleCreateRace}
-                      onUpdateRace={handleUpdateRace}
-                      onDeleteRace={handleDeleteRace}
-                    />
-                  }
-                />
-                <Route
-                  path="/history"
-                  element={
-                    <RaceHistory
-                      races={races}
-                      onCreateRace={handleCreateRace}
-                      onUpdateRace={handleUpdateRace}
-                      onDeleteRace={handleDeleteRace}
-                    />
-                  }
-                />
-                <Route
-                  path="/championship"
-                  element={<ChampionshipManager races={races} />}
-                />
-                <Route
-                  path="/analysis"
-                  element={<ChampionshipAnalysis races={races} />}
-                />
-                <Route
-                  path="/calendar"
-                  element={
-                    <Calendar
-                      races={races}
-                      onCreateRace={handleCreateRace}
-                      onUpdateRace={handleUpdateRace}
-                      onDeleteRace={handleDeleteRace}
-                    />
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <Settings
-                      settings={settings}
-                      onSettingsUpdate={handleSettingsUpdate}
-                      races={races}
-                    />
-                  }
-                />
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/planner" element={<RacePlanner />} />
+                <Route path="/history" element={<RaceHistory />} />
+                <Route path="/championship" element={<ChampionshipManager />} />
+                <Route path="/analysis" element={<ChampionshipAnalysis />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/series" element={<SeriesEditor />} />
                 <Route path="/docs" element={<Documentation />} />
               </Routes>
-            </Container>
+            </ErrorBoundary>
           </Box>
-
-          <SettingsDialog
-            open={settingsOpen}
-            onClose={handleSettingsClose}
-            settings={settings}
-            onSettingsUpdate={handleSettingsUpdate}
-          />
         </Box>
+
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleMenuClose}
+        >
+          <MenuItem onClick={handleSettingsOpen}>Settings</MenuItem>
+        </Menu>
+
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={handleSettingsClose}
+          settings={settings}
+          onSave={handleSettingsUpdate}
+        />
       </LocalizationProvider>
     </ThemeProvider>
   )

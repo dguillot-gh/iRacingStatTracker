@@ -1,10 +1,11 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { AppSettings } from '../../services/storage';
-import { StorageService } from '../../services/storage';
+import { storage } from '../../services/storage';
+import { RootState } from '../index';
 
 interface SettingsState {
   settings: AppSettings;
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
 }
 
@@ -22,7 +23,7 @@ const initialState: SettingsState = {
     backupFrequency: 'daily',
     calendarSync: false
   },
-  isLoading: false,
+  loading: false,
   error: null,
 };
 
@@ -32,25 +33,37 @@ export const settingsSlice = createSlice({
   reducers: {
     setSettings: (state, action: PayloadAction<AppSettings>) => {
       state.settings = action.payload;
-      StorageService.saveSettings(action.payload);
+      storage.saveSettings(action.payload).catch(error => {
+        console.error('Failed to save settings:', error);
+        state.error = error instanceof Error ? error.message : 'Failed to save settings';
+      });
     },
     updateTheme: (state, action: PayloadAction<'light' | 'dark'>) => {
       state.settings.theme = action.payload;
-      StorageService.saveSettings(state.settings);
+      storage.saveSettings(state.settings).catch(error => {
+        console.error('Failed to save theme:', error);
+        state.error = error instanceof Error ? error.message : 'Failed to save theme';
+      });
     },
     toggleNotifications: (state) => {
       state.settings.notifications = {
         ...state.settings.notifications,
         enabled: !state.settings.notifications.enabled
       };
-      StorageService.saveSettings(state.settings);
+      storage.saveSettings(state.settings).catch(error => {
+        console.error('Failed to save notification settings:', error);
+        state.error = error instanceof Error ? error.message : 'Failed to save notification settings';
+      });
     },
     toggleCalendarSync: (state) => {
       state.settings.calendarSync = !state.settings.calendarSync;
-      StorageService.saveSettings(state.settings);
+      storage.saveSettings(state.settings).catch(error => {
+        console.error('Failed to save calendar sync settings:', error);
+        state.error = error instanceof Error ? error.message : 'Failed to save calendar sync settings';
+      });
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+      state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
@@ -58,6 +71,7 @@ export const settingsSlice = createSlice({
   },
 });
 
+// Actions
 export const {
   setSettings,
   updateTheme,
@@ -66,5 +80,10 @@ export const {
   setLoading,
   setError,
 } = settingsSlice.actions;
+
+// Selectors
+export const selectSettings = (state: RootState) => state.settings.settings;
+export const selectSettingsLoading = (state: RootState) => state.settings.loading;
+export const selectSettingsError = (state: RootState) => state.settings.error;
 
 export default settingsSlice.reducer; 

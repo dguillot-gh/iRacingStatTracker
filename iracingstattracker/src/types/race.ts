@@ -59,13 +59,13 @@ export interface ChampionshipStanding {
   droppedWeeks: number[]
 }
 
-export interface RaceEntry {
+export interface Race {
   id: string
-  date: Date
-  endDate?: Date
-  series: string
+  date: string | Date
+  endDate?: string | Date
+  series: RaceSeries
   class: RaceClass
-  track: Track
+  track: string
   vehicle: string
   week: number
   season: string
@@ -79,4 +79,7 @@ export interface RaceEntry {
   startTime?: string
 }
 
-export type RaceFormData = Omit<RaceEntry, 'id' | 'completed' | 'position' | 'iRatingChange'> 
+export type RaceFormData = Omit<Race, 'id'>
+
+// Add type alias for backward compatibility
+export type RaceEntry = Race 
