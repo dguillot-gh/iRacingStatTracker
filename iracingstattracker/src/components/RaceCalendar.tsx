@@ -17,7 +17,7 @@ import { PickersDay } from '@mui/x-date-pickers/PickersDay'
 import { DayCalendarSkeleton } from '@mui/x-date-pickers/DayCalendarSkeleton'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { RaceEntry, RaceSeries } from '../types/race'
+import { RaceEntry, RaceSeries, RaceClass } from '../types/race'
 import { isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, format } from 'date-fns'
 
 interface RaceCalendarProps {
@@ -26,6 +26,16 @@ interface RaceCalendarProps {
 }
 
 type ViewMode = 'month' | 'week'
+
+// Helper function to get track display text
+const getTrackDisplayText = (track: string, raceClass: RaceClass) => {
+  // If track contains a hyphen, assume it's in format "name - type"
+  if (track.includes('-')) {
+    return track
+  }
+  // Otherwise, append the race class type
+  return `${track} - ${raceClass}`
+}
 
 export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) {
   const [selectedSeries, setSelectedSeries] = useState<RaceSeries | 'all'>('all')
@@ -120,7 +130,7 @@ export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) 
                       {race.series}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {race.track.name} - {race.vehicle}
+                      {race.track} - {race.vehicle}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                       <Chip
@@ -130,7 +140,7 @@ export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) 
                         variant="outlined"
                       />
                       <Chip
-                        label={race.track.type}
+                        label={race.class}
                         size="small"
                         color="secondary"
                         variant="outlined"
@@ -258,7 +268,7 @@ export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) 
                 onClick={() => onRaceClick?.(race)}
               >
                 <Typography variant="subtitle1" gutterBottom>
-                  {race.series} - {race.track.name}
+                  {race.series} - {race.track}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                   <Chip
@@ -281,7 +291,7 @@ export default function RaceCalendar({ races, onRaceClick }: RaceCalendarProps) 
                   />
                 </Box>
                 <Typography variant="body2" color="text.secondary">
-                  Track Type: {race.track.type}
+                  Track Type: {race.class}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Status: {race.status}
